@@ -1,0 +1,11 @@
+# MQL5 & Compiler artifacts
+*.log
+*.tmp
+*.bak
+*.orig
+*~
+
+# OS artifacts
+Thumbs.db
+Desktop.ini
+.DS_Store
