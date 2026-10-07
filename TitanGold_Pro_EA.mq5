@@ -23,8 +23,9 @@
 //+------------------------------------------------------------------+
 enum ENUM_STRATEGY_MODE
   {
-   STRATEGY_HYBRID_CONFLUENCE = 0, // Che do Hybrid (Trend EMA + RSI + Bollinger + ATR)
-   STRATEGY_ASIAN_SWEEP       = 1  // Che do Quet Thanh Khoan Phien A (Asian Range Sweep/Breakout)
+   STRATEGY_FAST_SCALPING     = 0, // Che do Sieu Luot Song (Scalping M1/M5 - TP +3$, SL -3.5$)
+   STRATEGY_HYBRID_CONFLUENCE = 1, // Che do Hybrid (Trend EMA + RSI + Bollinger + ATR)
+   STRATEGY_ASIAN_SWEEP       = 2  // Che do Quet Thanh Khoan Phien A (Asian Range Sweep/Breakout)
   };
 
 enum ENUM_RISK_CALC
@@ -38,12 +39,19 @@ enum ENUM_RISK_CALC
 //| INPUT PARAMETERS (THIET LAP THAM SO DAU VAO)                    |
 //+------------------------------------------------------------------+
 input group "=== 1. CHE DO CHIEN LUOC & NEN TANG ==="
-input ENUM_STRATEGY_MODE InpStrategyMode        = STRATEGY_HYBRID_CONFLUENCE; // Chien luoc chu dao
+input ENUM_STRATEGY_MODE InpStrategyMode        = STRATEGY_FAST_SCALPING; // Chien luoc chu dao (Mac dinh: SIEU LUOT SONG)
 input ulong              InpMagicNumber         = 7772026;             // Magic Number rieng cho EA
-input string             InpTradeComment        = "TitanGold_Pro";     // Ghi chu lenh
+input string             InpTradeComment        = "TitanScalp_Pro";    // Ghi chu lenh
 input ulong              InpSlippage            = 30;                  // Do truot gia cho phep (Points)
 
-input group "=== 2. QUAN TRI RUI RO THAP (LOW RISK & SAFETY GUARD) ==="
+input group "=== 2. CAI DAT SIEU LUOT SONG (SCALPING TP +3$ / SL -3.5$) ==="
+input double             InpScalpTP_USD         = 3.0;                 // Chot loi moi lenh luot song (USD, mac dinh +3.0$)
+input double             InpScalpSL_USD         = 3.5;                 // Cat lo moi lenh luot song (USD, de xuat hop ly -3.5$)
+input int                InpScalpFastEma        = 9;                   // EMA Scalp Nhanh (chu ky 9)
+input int                InpScalpSlowEma        = 21;                  // EMA Scalp Cham (chu ky 21)
+input int                InpScalpRsiPeriod      = 7;                   // RSI Scalp sieu nhay (chu ky 7)
+
+input group "=== 3. QUAN TRI RUI RO & AN TOAN (RISK & SAFETY GUARD) ==="
 input ENUM_RISK_CALC     InpRiskMode            = RISK_BY_EQUITY_PERCENT; // Phuong phap quan ly von
 input double             InpRiskPercent         = 1.0;                 // % Rui ro moi lenh (Khuyen nghi 0.5% - 1.0%)
 input double             InpFixedLot            = 0.01;                // Lot co dinh (neu chon Fixed)
@@ -106,11 +114,16 @@ CPositionInfo  m_position;
 CAccountInfo   m_account;
 CSymbolInfo    m_symbol;
 
-int            m_fastEmaHandle  = INVALID_HANDLE;
-int            m_slowEmaHandle  = INVALID_HANDLE;
-int            m_rsiHandle      = INVALID_HANDLE;
-int            m_bandsHandle    = INVALID_HANDLE;
-int            m_atrHandle      = INVALID_HANDLE;
+int            m_fastEmaHandle     = INVALID_HANDLE;
+int            m_slowEmaHandle     = INVALID_HANDLE;
+int            m_rsiHandle         = INVALID_HANDLE;
+int            m_bandsHandle       = INVALID_HANDLE;
+int            m_atrHandle         = INVALID_HANDLE;
+
+// Handles cho Scalping
+int            m_scalpFastEmaHandle= INVALID_HANDLE;
+int            m_scalpSlowEmaHandle= INVALID_HANDLE;
+int            m_scalpRsiHandle    = INVALID_HANDLE;
 
 datetime       m_lastBarTime       = 0;
 datetime       m_currentDay        = 0;
@@ -155,12 +168,10 @@ int OnInit()
    m_bandsHandle   = iBands(_Symbol, PERIOD_CURRENT, InpBandsPeriod, 0, InpBandsDeviation, PRICE_CLOSE);
    m_atrHandle     = iATR(_Symbol, PERIOD_CURRENT, InpAtrPeriod);
 
-   if(m_fastEmaHandle == INVALID_HANDLE || m_slowEmaHandle == INVALID_HANDLE ||
-      m_rsiHandle == INVALID_HANDLE || m_bandsHandle == INVALID_HANDLE || m_atrHandle == INVALID_HANDLE)
-     {
-      Print("Loi khoi tao Indicator handles!");
-      return INIT_FAILED;
-     }
+   // Khoi tao chi bao cho Scalping
+   m_scalpFastEmaHandle = iMA(_Symbol, PERIOD_CURRENT, InpScalpFastEma, 0, MODE_EMA, PRICE_CLOSE);
+   m_scalpSlowEmaHandle = iMA(_Symbol, PERIOD_CURRENT, InpScalpSlowEma, 0, MODE_EMA, PRICE_CLOSE);
+   m_scalpRsiHandle     = iRSI(_Symbol, PERIOD_CURRENT, InpScalpRsiPeriod, PRICE_CLOSE);
 
    m_dayStartEquity = m_account.Equity();
    m_currentDay     = GetStartOfDay(TimeCurrent());
@@ -168,7 +179,8 @@ int OnInit()
    m_lastHeartbeatTime = TimeCurrent() - 260; // 40s sau se in bao cao dau tien
 
    Print(">>> TitanGold_Pro_EA da khoi tao thanh cong tren ", _Symbol, " | Magic: ", InpMagicNumber);
-   PrintFormat(">>> [XAC NHAN HOAT DONG 100%%] Gia: %.2f | TRANG THAI: DANG CHO DIEM VAO DEP...", m_symbol.Bid());
+   PrintFormat(">>> [SIEU LUOT SONG - SCALPING KICH HOAT] TP=+$%.2f | SL=-$%.2f | Gia: %.2f",
+               InpScalpTP_USD, InpScalpSL_USD, m_symbol.Bid());
    return(INIT_SUCCEEDED);
   }
 
@@ -182,6 +194,10 @@ void OnDeinit(const int reason)
    if(m_rsiHandle != INVALID_HANDLE)     IndicatorRelease(m_rsiHandle);
    if(m_bandsHandle != INVALID_HANDLE)   IndicatorRelease(m_bandsHandle);
    if(m_atrHandle != INVALID_HANDLE)     IndicatorRelease(m_atrHandle);
+
+   if(m_scalpFastEmaHandle != INVALID_HANDLE) IndicatorRelease(m_scalpFastEmaHandle);
+   if(m_scalpSlowEmaHandle != INVALID_HANDLE) IndicatorRelease(m_scalpSlowEmaHandle);
+   if(m_scalpRsiHandle != INVALID_HANDLE)     IndicatorRelease(m_scalpRsiHandle);
 
    ObjectsDeleteAll(0, "TitanDash_");
    Comment("");
@@ -249,10 +265,71 @@ void OnTick()
       return;
 
    // 9. Thuc thi tin hieu giao dich theo chien luoc
-   if(InpStrategyMode == STRATEGY_HYBRID_CONFLUENCE)
+   if(InpStrategyMode == STRATEGY_FAST_SCALPING)
+      ExecuteFastScalpingStrategy();
+   else if(InpStrategyMode == STRATEGY_HYBRID_CONFLUENCE)
       ExecuteHybridConfluenceStrategy();
    else if(InpStrategyMode == STRATEGY_ASIAN_SWEEP)
       ExecuteAsianSweepStrategy();
+  }
+
+//+------------------------------------------------------------------+
+//| Chien luoc 0: Sieu Luot Song (Fast Scalping M1/M5 - TP 3$ / SL 3.5$)
+//+------------------------------------------------------------------+
+void ExecuteFastScalpingStrategy()
+  {
+   double fastEma = GetIndicatorBuffer(m_scalpFastEmaHandle, 0, 1);
+   double slowEma = GetIndicatorBuffer(m_scalpSlowEmaHandle, 0, 1);
+   double rsi     = GetIndicatorBuffer(m_scalpRsiHandle, 0, 1);
+
+   if(fastEma == 0 || slowEma == 0 || rsi == 0)
+      return;
+
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+   if(CopyRates(_Symbol, PERIOD_CURRENT, 1, 3, rates) < 2)
+      return;
+
+   double close1 = rates[0].close;
+   double open1  = rates[0].open;
+
+   // 1. TÍN HIỆU BUY SCALP:
+   // EMA 9 > EMA 21, Nen vua dong la nen xanh, RSI nam trong vung xung luc tang (46 - 78)
+   if(fastEma > slowEma && close1 > open1 && close1 >= fastEma * 0.9995 && rsi >= 46.0 && rsi <= 78.0)
+     {
+      double ask = m_symbol.Ask();
+      double slDist = InpScalpSL_USD;
+      double tpDist = InpScalpTP_USD;
+      double sl = NormalizeDouble(ask - slDist, m_symbol.Digits());
+      double tp = NormalizeDouble(ask + tpDist, m_symbol.Digits());
+
+      double lot = 0.01;
+      if(m_trade.Buy(lot, _Symbol, ask, sl, tp, "TitanScalp_Buy"))
+        {
+         PrintFormat(">>> [SCALP BUY KHỚP LỆNH] 0.01 Lot @ %.3f | Chốt lời: +$%.2f (TP=%.3f) | Cắt lỗ: -$%.2f (SL=%.3f)",
+                     ask, InpScalpTP_USD, tp, InpScalpSL_USD, sl);
+        }
+      return;
+     }
+
+   // 2. TÍN HIỆU SELL SCALP:
+   // EMA 9 < EMA 21, Nen vua dong la nen do, RSI nam trong vung xung luc giam (22 - 54)
+   if(fastEma < slowEma && close1 < open1 && close1 <= fastEma * 1.0005 && rsi <= 54.0 && rsi >= 22.0)
+     {
+      double bid = m_symbol.Bid();
+      double slDist = InpScalpSL_USD;
+      double tpDist = InpScalpTP_USD;
+      double sl = NormalizeDouble(bid + slDist, m_symbol.Digits());
+      double tp = NormalizeDouble(bid - tpDist, m_symbol.Digits());
+
+      double lot = 0.01;
+      if(m_trade.Sell(lot, _Symbol, bid, sl, tp, "TitanScalp_Sell"))
+        {
+         PrintFormat(">>> [SCALP SELL KHỚP LỆNH] 0.01 Lot @ %.3f | Chốt lời: +$%.2f (TP=%.3f) | Cắt lỗ: -$%.2f (SL=%.3f)",
+                     bid, InpScalpTP_USD, tp, InpScalpSL_USD, sl);
+        }
+      return;
+     }
   }
 
 //+------------------------------------------------------------------+
@@ -476,9 +553,32 @@ void ManageActiveTrades()
       double currentProfitDist = (type == POSITION_TYPE_BUY) ? (m_symbol.Bid() - openPrice) : (openPrice - m_symbol.Ask());
       double profitInR = currentProfitDist / initialRiskDist;
 
-      // --- 0. TU DONG CHOT LOI THEO SO TIEN USD (BO TIEN VAO TUI NGAY) ---
+      // --- 0. CHOT LOI & CAT LO THEO TIEN MAT CHO SIEU LUOT SONG (SCALPING) ---
       double profitMoney = m_position.Profit() + m_position.Swap();
-      if(InpUseMoneyTP && profitMoney >= InpTargetProfitUSD)
+      if(InpStrategyMode == STRATEGY_FAST_SCALPING)
+        {
+         // Chot loi +3$
+         if(profitMoney >= InpScalpTP_USD)
+           {
+            if(m_trade.PositionClose(ticket))
+              {
+               PrintFormat(">>> [SCALP CHỐT LÃI] Ticket #%d: Đạt chỉ tiêu LÃI +$%.2f >= $%.2f. Đã đóng lệnh bỏ túi!",
+                           ticket, profitMoney, InpScalpTP_USD);
+               continue;
+              }
+           }
+         // Cat lo -3.5$
+         else if(profitMoney <= -InpScalpSL_USD)
+           {
+            if(m_trade.PositionClose(ticket))
+              {
+               PrintFormat(">>> [SCALP CẮT LỖ] Ticket #%d: Chạm ngưỡng CẮT LỖ -$%.2f <= -$%.2f. Đã đóng lệnh bảo toàn vốn!",
+                           ticket, MathAbs(profitMoney), InpScalpSL_USD);
+               continue;
+              }
+           }
+        }
+      else if(InpUseMoneyTP && profitMoney >= InpTargetProfitUSD)
         {
          if(m_trade.PositionClose(ticket))
            {
@@ -717,10 +817,11 @@ void RenderDashboard()
    CreateRect(prefix + "BG", x - 10, y - 10, 275, 295, C'10,15,30', C'212,175,55'); // Gold border
 
    // 2. Title & Status
-   CreateText(prefix + "Title", "⚜ TITAN GOLD PRO EA ⚜", x + 15, y, "Segoe UI", 10, C'234,179,8', true);
+   string titleStr = (InpStrategyMode == STRATEGY_FAST_SCALPING) ? "⚡ TITAN GOLD SCALPER ⚡" : "⚜ TITAN GOLD PRO EA ⚜";
+   CreateText(prefix + "Title", titleStr, x + 12, y, "Segoe UI", 10, C'234,179,8', true);
    
    y += lh + 2;
-   string botStatus = (CountActiveTrades() > 0) ? "● TRANG THAI: DANG VAO LENH" : "● TRANG THAI: CHO DIEM VAO DEP";
+   string botStatus = (CountActiveTrades() > 0) ? "● DANG CHAY LENH SCALP" : "● CHO TIN HIEU LUOT SONG";
    color statusCol  = (CountActiveTrades() > 0) ? C'255,215,0' : clrLime;
    CreateText(prefix + "Status", botStatus, x + 5, y, "Segoe UI", 9, statusCol, true);
 
@@ -749,7 +850,11 @@ void RenderDashboard()
 
    // 6. Strategy & Trend
    y += lh;
-   string stratStr = (InpStrategyMode == STRATEGY_HYBRID_CONFLUENCE) ? "Hybrid Confluence" : "Asian Range Sweep";
+   string stratStr = "Hybrid Confluence";
+   if(InpStrategyMode == STRATEGY_FAST_SCALPING)
+      stratStr = StringFormat("Scalping (TP: +$%.1f | SL: -$%.1f)", InpScalpTP_USD, InpScalpSL_USD);
+   else if(InpStrategyMode == STRATEGY_ASIAN_SWEEP)
+      stratStr = "Asian Range Sweep";
    CreateText(prefix + "Strat", StringFormat("Strategy: %s", stratStr), x, y, "Segoe UI", 9, C'244,114,182');
 
    y += lh;
