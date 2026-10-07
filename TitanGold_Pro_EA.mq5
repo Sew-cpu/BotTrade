@@ -158,6 +158,7 @@ int OnInit()
 
    m_dayStartEquity = m_account.Equity();
    m_currentDay     = GetStartOfDay(TimeCurrent());
+   m_dailyLimitHit  = false;
 
    Print(">>> TitanGold_Pro_EA da khoi tao thanh cong tren ", _Symbol, " | Magic: ", InpMagicNumber);
    return(INIT_SUCCEEDED);
