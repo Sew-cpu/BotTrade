@@ -161,8 +161,10 @@ int OnInit()
    m_dayStartEquity = m_account.Equity();
    m_currentDay     = GetStartOfDay(TimeCurrent());
    m_dailyLimitHit  = false;
+   m_lastHeartbeatTime = TimeCurrent() - 260; // 40s sau se in bao cao dau tien
 
    Print(">>> TitanGold_Pro_EA da khoi tao thanh cong tren ", _Symbol, " | Magic: ", InpMagicNumber);
+   PrintFormat(">>> [XAC NHAN HOAT DONG 100%%] Gia: %.2f | TRANG THAI: DANG CHO DIEM VAO DEP...", m_symbol.Bid());
    return(INIT_SUCCEEDED);
   }
 
@@ -698,8 +700,13 @@ void RenderDashboard()
    // 1. Background
    CreateRect(prefix + "BG", x - 10, y - 10, 275, 295, C'10,15,30', C'212,175,55'); // Gold border
 
-   // 2. Title
+   // 2. Title & Status
    CreateText(prefix + "Title", "⚜ TITAN GOLD PRO EA ⚜", x + 15, y, "Segoe UI", 10, C'234,179,8', true);
+   
+   y += lh + 2;
+   string botStatus = (CountActiveTrades() > 0) ? "● TRANG THAI: DANG VAO LENH" : "● TRANG THAI: CHO DIEM VAO DEP";
+   color statusCol  = (CountActiveTrades() > 0) ? C'255,215,0' : clrLime;
+   CreateText(prefix + "Status", botStatus, x + 5, y, "Segoe UI", 9, statusCol, true);
 
    // 3. Balance & Equity
    y += lh + 6;
@@ -743,12 +750,6 @@ void RenderDashboard()
    y += lh;
    string asianStatus = m_asianRangeReady ? StringFormat("Asian: H=%.2f L=%.2f", m_asianHigh, m_asianLow) : "Asian: Forming...";
    CreateText(prefix + "Asian", asianStatus, x, y, "Segoe UI", 9, C'203,213,225');
-
-   // 8. Bot Status
-   y += lh;
-   string botStatus = (CountActiveTrades() > 0) ? "Trang thai: DANG CHAY LENH" : "Trang thai: CHO DIEM VAO DEP";
-   color statusCol  = (CountActiveTrades() > 0) ? clrGold : clrLime;
-   CreateText(prefix + "Status", botStatus, x, y, "Segoe UI", 9, statusCol, true);
   }
 
 //+------------------------------------------------------------------+
