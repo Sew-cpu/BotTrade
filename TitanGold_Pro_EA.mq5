@@ -218,6 +218,9 @@ void OnTick()
       return;
    m_lastBarTime = barTime;
 
+   PrintFormat(">>> [Nen moi %s] Dang quet tin hieu tren %s (Spread: %d) | Dang cho diem vao dep...",
+               TimeToString(barTime, TIME_MINUTES), _Symbol, currentSpread);
+
    // 8. Kiem tra so luong vi the dang chay
    if(CountActiveTrades() >= InpMaxOpenTrades)
       return;
