@@ -58,7 +58,7 @@ input double             InpFixedLot            = 0.01;                // Lot co
 input bool               InpUseDailyShield      = false;               // Khoa bot khi vuot nguong ngay (Mac dinh: False - KHONG KHOA)
 input double             InpMaxDailyLossPct     = 5.0;                 // Gioi han sụt giam von toi da trong ngay (%)
 input int                InpMaxSpreadPoints     = 350;                 // Spread toi da cho phep (Points, vi du Exness XAUUSDm ~ 200-300 points)
-input int                InpMaxOpenTrades       = 1;                   // So vi the mo toi da dong thoi
+input int                InpMaxOpenTrades       = 5;                   // So vi the mo toi da dong thoi (Cho phep mo den 5 lenh luot song)
 
 input group "=== 3. THIET LAP CHIEN LUOC HYBRID CONFLUENCE ==="
 input int                InpFastEmaPeriod       = 50;                  // EMA 50 (Xu huong trung han)
@@ -257,8 +257,8 @@ void OnTick()
       return;
    m_lastBarTime = barTime;
 
-   PrintFormat(">>> [Nen moi %s] Dang quet tin hieu tren %s (Spread: %d) | Dang cho diem vao dep...",
-               TimeToString(barTime, TIME_MINUTES), _Symbol, currentSpread);
+   PrintFormat(">>> [Nen moi %s] Quet tin hieu Luot Song M5 tren %s (Dang chay %d/%d lenh)...",
+               TimeToString(barTime, TIME_MINUTES), _Symbol, CountActiveTrades(), InpMaxOpenTrades);
 
    // 8. Kiem tra so luong vi the dang chay
    if(CountActiveTrades() >= InpMaxOpenTrades)
@@ -817,8 +817,8 @@ void RenderDashboard()
    CreateRect(prefix + "BG", x - 10, y - 10, 275, 295, C'10,15,30', C'212,175,55'); // Gold border
 
    // 2. Title & Status
-   string titleStr = (InpStrategyMode == STRATEGY_FAST_SCALPING) ? "⚡ TITAN GOLD SCALPER ⚡" : "⚜ TITAN GOLD PRO EA ⚜";
-   CreateText(prefix + "Title", titleStr, x + 12, y, "Segoe UI", 10, C'234,179,8', true);
+   string titleStr = (InpStrategyMode == STRATEGY_FAST_SCALPING) ? "⚡ TITAN SCALPER M5 ⚡" : "⚜ TITAN GOLD PRO EA ⚜";
+   CreateText(prefix + "Title", titleStr, x + 15, y, "Segoe UI", 10, C'234,179,8', true);
    
    y += lh + 2;
    string botStatus = (CountActiveTrades() > 0) ? "● DANG CHAY LENH SCALP" : "● CHO TIN HIEU LUOT SONG";
