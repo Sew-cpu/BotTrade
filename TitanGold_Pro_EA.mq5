@@ -73,7 +73,11 @@ input int                InpAtrPeriod           = 14;                  // Chu ky
 input double             InpAtrMultiplierSL     = 1.5;                 // Boi so ATR cho Stop Loss (Tranh quét râu nến)
 input double             InpRiskRewardRatio     = 2.5;                 // Ty le R:R (1:2.5 den 1:3.0 toi da hoa loi nhuan)
 
-input group "=== 6. CHOT LOI TUNG PHAN (PARTIAL TAKE PROFIT 50%) ==="
+input group "=== 6. CHOT LOI LINH HOAT THEO TIEN MAT (MONEY TAKE PROFIT) ==="
+input bool               InpUseMoneyTP          = true;                // Tu dong chot loi theo so tien USD (Loi ngan bo tui)
+input double             InpTargetProfitUSD     = 4.0;                 // So tien USD lai toi thieu de tu dong dong lenh (3$ - 5$)
+
+input group "=== 7. CHOT LOI TUNG PHAN (PARTIAL TAKE PROFIT 50%) ==="
 input bool               InpUsePartialClose     = true;                // Kich hoat chot loi 50% khoi luong
 input double             InpPartialCloseRatioR  = 1.5;                 // Chot 50% khi lai dat 1.5R (Bo tien vao tui)
 
@@ -471,6 +475,18 @@ void ManageActiveTrades()
 
       double currentProfitDist = (type == POSITION_TYPE_BUY) ? (m_symbol.Bid() - openPrice) : (openPrice - m_symbol.Ask());
       double profitInR = currentProfitDist / initialRiskDist;
+
+      // --- 0. TU DONG CHOT LOI THEO SO TIEN USD (BO TIEN VAO TUI NGAY) ---
+      double profitMoney = m_position.Profit() + m_position.Swap();
+      if(InpUseMoneyTP && profitMoney >= InpTargetProfitUSD)
+        {
+         if(m_trade.PositionClose(ticket))
+           {
+            PrintFormat(">>> [CHOT LOI TIEN MAT] Ticket #%d: Lai +$%.2f >= $%.2f. Da tu dong dong lenh bo tien vao tui!",
+                        ticket, profitMoney, InpTargetProfitUSD);
+            continue;
+           }
+        }
 
       // --- 1. CHOT LOI TUNG PHAN 50% TAI 1.5R ---
       if(InpUsePartialClose && profitInR >= InpPartialCloseRatioR)
