@@ -47,6 +47,7 @@ input group "=== 2. QUAN TRI RUI RO THAP (LOW RISK & SAFETY GUARD) ==="
 input ENUM_RISK_CALC     InpRiskMode            = RISK_BY_EQUITY_PERCENT; // Phuong phap quan ly von
 input double             InpRiskPercent         = 1.0;                 // % Rui ro moi lenh (Khuyen nghi 0.5% - 1.0%)
 input double             InpFixedLot            = 0.01;                // Lot co dinh (neu chon Fixed)
+input bool               InpUseDailyShield      = false;               // Khoa bot khi vuot nguong ngay (Mac dinh: False - KHONG KHOA)
 input double             InpMaxDailyLossPct     = 5.0;                 // Gioi han sụt giam von toi da trong ngay (%)
 input int                InpMaxSpreadPoints     = 350;                 // Spread toi da cho phep (Points, vi du Exness XAUUSDm ~ 200-300 points)
 input int                InpMaxOpenTrades       = 1;                   // So vi the mo toi da dong thoi
@@ -55,10 +56,10 @@ input group "=== 3. THIET LAP CHIEN LUOC HYBRID CONFLUENCE ==="
 input int                InpFastEmaPeriod       = 50;                  // EMA 50 (Xu huong trung han)
 input int                InpSlowEmaPeriod       = 200;                 // EMA 200 (Xu huong dai han theo Dow)
 input int                InpRsiPeriod           = 14;                  // Chu ky RSI
-input double             InpRsiBullishMin       = 48.0;                // RSI Buy toi thieu
-input double             InpRsiBullishMax       = 68.0;                // RSI Buy toi da (Tranh du dinh Qua Mua)
-input double             InpRsiBearishMax       = 52.0;                // RSI Sell toi da
-input double             InpRsiBearishMin       = 32.0;                // RSI Sell toi thieu (Tranh ban day Qua Ban)
+input double             InpRsiBullishMin       = 45.0;                // RSI Buy toi thieu
+input double             InpRsiBullishMax       = 75.0;                // RSI Buy toi da
+input double             InpRsiBearishMin       = 25.0;                // RSI Sell toi thieu (Cho phep bat Breakout manh)
+input double             InpRsiBearishMax       = 55.0;                // RSI Sell toi da
 input int                InpBandsPeriod         = 20;                  // Chu ky Bollinger Bands
 input double             InpBandsDeviation      = 2.0;                 // Do lech chuan Bands
 
@@ -251,7 +252,7 @@ void ExecuteHybridConfluenceStrategy()
 
    MqlRates rates[];
    ArraySetAsSeries(rates, true);
-   if(CopyRates(_Symbol, PERIOD_CURRENT, 1, 2, rates) < 2)
+   if(CopyRates(_Symbol, PERIOD_CURRENT, 1, 5, rates) < 4)
       return;
 
    double close1 = rates[0].close;
@@ -259,17 +260,21 @@ void ExecuteHybridConfluenceStrategy()
    double low1   = rates[0].low;
    double high1  = rates[0].high;
 
-   // --- TIN HIEU BUY CONFLUENCE ---
-   // 1. Xu huong chu dao: EMA50 > EMA200 va Gia > EMA50
-   bool trendBullish = (fastEma > slowEma && close1 > fastEma);
-   // 2. RSI nam trong vung xung luong tang lanh manh (48 - 68), chua qua mua
-   bool rsiBullish   = (rsi >= InpRsiBullishMin && rsi <= InpRsiBullishMax);
-   // 3. Gia bat tang tu Middle Band hoac vuot len tren Middle Band
-   bool bandBullish  = (close1 > midBand && (open1 <= midBand || low1 <= midBand * 1.0005));
-   // 4. Nen xanh xac nhan (Close > Open)
-   bool candleBullish= (close1 > open1);
+   // Tim Dinh va Day cua 3 nen truoc de bat tin hieu Pha Vo Da (Breakout Momentum)
+   double prevHigh = MathMax(rates[1].high, MathMax(rates[2].high, rates[3].high));
+   double prevLow  = MathMin(rates[1].low,  MathMin(rates[2].low,  rates[3].low));
 
-   if(trendBullish && rsiBullish && bandBullish && candleBullish)
+   // --- TIN HIEU BUY CONFLUENCE (PULLBACK HOAC BREAKOUT) ---
+   bool trendBullish  = (fastEma > slowEma && close1 > fastEma);
+   bool rsiBullish    = (rsi >= InpRsiBullishMin && rsi <= InpRsiBullishMax);
+   bool candleBullish = (close1 > open1);
+
+   // Tín hiệu 1: Pullback test MidBand hoac EMA50 va bat tang
+   bool buyPullback   = (close1 > midBand && (low1 <= midBand * 1.0015 || low1 <= fastEma * 1.0015));
+   // Tín hiệu 2: Breakout pha vo dinh 3 nen truoc voi than nen xung luc manh
+   bool buyBreakout   = (close1 > prevHigh && (close1 - open1) >= (atr * 0.20));
+
+   if(trendBullish && rsiBullish && candleBullish && (buyPullback || buyBreakout))
      {
       double ask = m_symbol.Ask();
       double slDist = atr * InpAtrMultiplierSL;
@@ -279,24 +284,25 @@ void ExecuteHybridConfluenceStrategy()
       double lot = CalculateSmartLot(ask, sl);
       if(lot > 0)
         {
+         string entryType = buyBreakout ? "BUY BREAKOUT" : "BUY PULLBACK";
          if(m_trade.Buy(lot, _Symbol, ask, sl, tp, InpTradeComment))
-            PrintFormat(">>> [BUY HYBRID] Lot=%.2f | Price=%.3f | SL=%.3f | TP=%.3f | R:R=1:%.1f",
-                        lot, ask, sl, tp, InpRiskRewardRatio);
+            PrintFormat(">>> [%s] Lot=%.2f | Price=%.3f | SL=%.3f | TP=%.3f | R:R=1:%.1f",
+                        entryType, lot, ask, sl, tp, InpRiskRewardRatio);
         }
       return;
      }
 
-   // --- TIN HIEU SELL CONFLUENCE ---
-   // 1. Xu huong chu dao: EMA50 < EMA200 va Gia < EMA50
-   bool trendBearish = (fastEma < slowEma && close1 < fastEma);
-   // 2. RSI nam trong vung xung luong giam lanh manh (32 - 52), chua qua ban
-   bool rsiBearish   = (rsi <= InpRsiBearishMax && rsi >= InpRsiBearishMin);
-   // 3. Gia quay dau tu Middle Band xuong duoi
-   bool bandBearish  = (close1 < midBand && (open1 >= midBand || high1 >= midBand * 0.9995));
-   // 4. Nen do xac nhan (Close < Open)
-   bool candleBearish= (close1 < open1);
+   // --- TIN HIEU SELL CONFLUENCE (PULLBACK HOAC BREAKOUT) ---
+   bool trendBearish  = (fastEma < slowEma && close1 < fastEma);
+   bool rsiBearish    = (rsi <= InpRsiBearishMax && rsi >= InpRsiBearishMin);
+   bool candleBearish = (close1 < open1);
 
-   if(trendBearish && rsiBearish && bandBearish && candleBearish)
+   // Tín hiệu 1: Pullback test MidBand hoac EMA50 va quay dau giam
+   bool sellPullback  = (close1 < midBand && (high1 >= midBand * 0.9985 || high1 >= fastEma * 0.9985));
+   // Tín hiệu 2: Breakout pha vo day 3 nen truoc voi than nen xung luc manh
+   bool sellBreakout  = (close1 < prevLow && (open1 - close1) >= (atr * 0.20));
+
+   if(trendBearish && rsiBearish && candleBearish && (sellPullback || sellBreakout))
      {
       double bid = m_symbol.Bid();
       double slDist = atr * InpAtrMultiplierSL;
@@ -306,9 +312,10 @@ void ExecuteHybridConfluenceStrategy()
       double lot = CalculateSmartLot(bid, sl);
       if(lot > 0)
         {
+         string entryType = sellBreakout ? "SELL BREAKOUT" : "SELL PULLBACK";
          if(m_trade.Sell(lot, _Symbol, bid, sl, tp, InpTradeComment))
-            PrintFormat(">>> [SELL HYBRID] Lot=%.2f | Price=%.3f | SL=%.3f | TP=%.3f | R:R=1:%.1f",
-                        lot, bid, sl, tp, InpRiskRewardRatio);
+            PrintFormat(">>> [%s] Lot=%.2f | Price=%.3f | SL=%.3f | TP=%.3f | R:R=1:%.1f",
+                        entryType, lot, bid, sl, tp, InpRiskRewardRatio);
         }
       return;
      }
@@ -567,6 +574,12 @@ double NormalizeLot(double lot)
 //+------------------------------------------------------------------+
 void CheckDailyRiskLimit()
   {
+   if(!InpUseDailyShield)
+     {
+      m_dailyLimitHit = false;
+      return;
+     }
+
    datetime now = TimeCurrent();
    datetime todayStart = GetStartOfDay(now);
 
@@ -692,8 +705,8 @@ void RenderDashboard()
    // 5. Daily DD Shield
    y += lh;
    double dayLoss = (m_dayStartEquity > 0) ? ((m_dayStartEquity - m_account.Equity()) / m_dayStartEquity * 100.0) : 0.0;
-   string guardStr = m_dailyLimitHit ? "LOCKED (Max Loss Hit)" : "ACTIVE SHIELD";
-   color guardCol  = m_dailyLimitHit ? clrRed : clrLime;
+   string guardStr = !InpUseDailyShield ? "KHONG KHOA (SAN SANG)" : (m_dailyLimitHit ? "LOCKED (Max Loss Hit)" : "ACTIVE SHIELD");
+   color guardCol  = (!InpUseDailyShield || !m_dailyLimitHit) ? clrLime : clrRed;
    CreateText(prefix + "Guard", StringFormat("Daily DD: %.2f%% [%s]", MathMax(0.0, dayLoss), guardStr), x, y, "Segoe UI", 9, guardCol);
 
    // 6. Strategy & Trend
