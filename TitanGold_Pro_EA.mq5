@@ -48,7 +48,7 @@ input ENUM_RISK_CALC     InpRiskMode            = RISK_BY_EQUITY_PERCENT; // Phu
 input double             InpRiskPercent         = 1.0;                 // % Rui ro moi lenh (Khuyen nghi 0.5% - 1.0%)
 input double             InpFixedLot            = 0.01;                // Lot co dinh (neu chon Fixed)
 input double             InpMaxDailyLossPct     = 3.0;                 // Gioi han sụt giam von toi da trong ngay (%)
-input int                InpMaxSpreadPoints     = 45;                  // Spread toi da cho phep (Points, vi du Vang 45pts = 4.5 pips)
+input int                InpMaxSpreadPoints     = 350;                 // Spread toi da cho phep (Points, vi du Exness XAUUSDm ~ 200-300 points)
 input int                InpMaxOpenTrades       = 1;                   // So vi the mo toi da dong thoi
 
 input group "=== 3. THIET LAP CHIEN LUOC HYBRID CONFLUENCE ==="
