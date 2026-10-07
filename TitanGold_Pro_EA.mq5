@@ -44,9 +44,9 @@ input ulong              InpMagicNumber         = 7772026;             // Magic 
 input string             InpTradeComment        = "TitanScalp_Pro";    // Ghi chu lenh
 input ulong              InpSlippage            = 30;                  // Do truot gia cho phep (Points)
 
-input group "=== 2. CAI DAT SIEU LUOT SONG (SCALPING TP +5$ / SL -3.5$) ==="
-input double             InpScalpTP_USD         = 5.0;                 // Chot loi moi lenh luot song (USD, muc ly tuong +5.0$)
-input double             InpScalpSL_USD         = 3.5;                 // Cat lo moi lenh luot song (USD, muc ly tuong -3.5$)
+input group "=== 2. CAI DAT SIEU LUOT SONG (SCALPING TP +6.5$ / SL -5.0$) ==="
+input double             InpScalpTP_USD         = 6.5;                 // Chot loi moi lenh luot song (USD, toi uu chuan 6.5$)
+input double             InpScalpSL_USD         = 5.0;                 // Cat lo moi lenh luot song (USD, dem rau nen an toan 5.0$)
 input int                InpScalpFastEma        = 9;                   // EMA Scalp Nhanh (chu ky 9)
 input int                InpScalpSlowEma        = 21;                  // EMA Scalp Cham (chu ky 21)
 input int                InpScalpRsiPeriod      = 7;                   // RSI Scalp sieu nhay (chu ky 7)
