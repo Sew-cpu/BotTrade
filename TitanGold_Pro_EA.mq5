@@ -47,7 +47,7 @@ input group "=== 2. QUAN TRI RUI RO THAP (LOW RISK & SAFETY GUARD) ==="
 input ENUM_RISK_CALC     InpRiskMode            = RISK_BY_EQUITY_PERCENT; // Phuong phap quan ly von
 input double             InpRiskPercent         = 1.0;                 // % Rui ro moi lenh (Khuyen nghi 0.5% - 1.0%)
 input double             InpFixedLot            = 0.01;                // Lot co dinh (neu chon Fixed)
-input double             InpMaxDailyLossPct     = 3.0;                 // Gioi han sụt giam von toi da trong ngay (%)
+input double             InpMaxDailyLossPct     = 5.0;                 // Gioi han sụt giam von toi da trong ngay (%)
 input int                InpMaxSpreadPoints     = 350;                 // Spread toi da cho phep (Points, vi du Exness XAUUSDm ~ 200-300 points)
 input int                InpMaxOpenTrades       = 1;                   // So vi the mo toi da dong thoi
 
@@ -585,8 +585,18 @@ void CheckDailyRiskLimit()
       if(!m_dailyLimitHit)
         {
          m_dailyLimitHit = true;
-         PrintFormat(">>> [DAILY SHIELD TRIGGERED] Sụt giảm ngày = %.2f%% >= %.2f%%. Khoa toan bo lenh moi hom nay!",
+         PrintFormat(">>> [DAILY SHIELD TRIGGERED] Sụt giảm ngày = %.2f%% >= %.2f%%. Khoa toan bo lenh moi!",
                      dailyLossPercent, InpMaxDailyLossPct);
+        }
+     }
+   else if(CountActiveTrades() == 0 && dailyLossPercent < InpMaxDailyLossPct)
+     {
+      if(m_dailyLimitHit)
+        {
+         m_dailyLimitHit = false;
+         if(currentEquity > m_dayStartEquity)
+            m_dayStartEquity = currentEquity; // Cap nhat moc von moi sau khi chot lai
+         PrintFormat(">>> [DAILY SHIELD RESET] Tai khoan an toan (Equity: %.2f$). San sang tiep tuc giao dich!", currentEquity);
         }
      }
   }
