@@ -108,10 +108,11 @@ int            m_rsiHandle      = INVALID_HANDLE;
 int            m_bandsHandle    = INVALID_HANDLE;
 int            m_atrHandle      = INVALID_HANDLE;
 
-datetime       m_lastBarTime    = 0;
-datetime       m_currentDay     = 0;
-double         m_dayStartEquity = 0.0;
-bool           m_dailyLimitHit  = false;
+datetime       m_lastBarTime       = 0;
+datetime       m_currentDay        = 0;
+datetime       m_lastHeartbeatTime = 0;
+double         m_dayStartEquity    = 0.0;
+bool           m_dailyLimitHit     = false;
 
 // Bien luu tru Asian Range
 double         m_asianHigh      = 0.0;
@@ -200,6 +201,20 @@ void OnTick()
    // 4. Ve Dashboard len man hinh
    if(InpShowDashboard)
       RenderDashboard();
+
+   // Kiem tra Heartbeat: Moi 5 phut (300s) neu chua co lenh nao thi bao cao cho nguoi dung
+   datetime nowTime = TimeCurrent();
+   if(CountActiveTrades() == 0 && (nowTime - m_lastHeartbeatTime >= 300))
+     {
+      m_lastHeartbeatTime = nowTime;
+      double bid = m_symbol.Bid();
+      double rsi = GetIndicatorBuffer(m_rsiHandle, 0, 0);
+      double fastEma = GetIndicatorBuffer(m_fastEmaHandle, 0, 0);
+      double slowEma = GetIndicatorBuffer(m_slowEmaHandle, 0, 0);
+      string trendStr = (fastEma > slowEma) ? "TANG (Bullish)" : (fastEma < slowEma ? "GIAM (Bearish)" : "SIDEWAY");
+      PrintFormat(">>> [BAO CAO 5 PHUT - %s] Bot hoat dong 100%% binh thuong | Gia: %.2f | Xu huong: %s | RSI: %.1f | DANG CHO DIEM VAO DEP...",
+                  TimeToString(nowTime, TIME_MINUTES), bid, trendStr, rsi);
+     }
 
    // Neu cham gioi han lo trong ngay, dung mo lenh
    if(m_dailyLimitHit)
@@ -681,7 +696,7 @@ void RenderDashboard()
    int lh = 20;
 
    // 1. Background
-   CreateRect(prefix + "BG", x - 10, y - 10, 275, 275, C'10,15,30', C'212,175,55'); // Gold border
+   CreateRect(prefix + "BG", x - 10, y - 10, 275, 295, C'10,15,30', C'212,175,55'); // Gold border
 
    // 2. Title
    CreateText(prefix + "Title", "⚜ TITAN GOLD PRO EA ⚜", x + 15, y, "Segoe UI", 10, C'234,179,8', true);
@@ -728,6 +743,12 @@ void RenderDashboard()
    y += lh;
    string asianStatus = m_asianRangeReady ? StringFormat("Asian: H=%.2f L=%.2f", m_asianHigh, m_asianLow) : "Asian: Forming...";
    CreateText(prefix + "Asian", asianStatus, x, y, "Segoe UI", 9, C'203,213,225');
+
+   // 8. Bot Status
+   y += lh;
+   string botStatus = (CountActiveTrades() > 0) ? "Trang thai: DANG CHAY LENH" : "Trang thai: CHO DIEM VAO DEP";
+   color statusCol  = (CountActiveTrades() > 0) ? clrGold : clrLime;
+   CreateText(prefix + "Status", botStatus, x, y, "Segoe UI", 9, statusCol, true);
   }
 
 //+------------------------------------------------------------------+
