@@ -4,6 +4,7 @@
 *.bak
 *.orig
 *~
+*.ex5
 
 # OS artifacts
 Thumbs.db

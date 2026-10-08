@@ -1,15 +1,16 @@
 # HỆ THỐNG TRADING BOT FOREX METATRADER 5 (MT5)
 
-Dự án gồm 4 Robot Giao Dịch Tự Động (**Expert Advisors - EA**) viết bằng ngôn ngữ **MQL5 thuần túy**, được thiết kế theo các tiêu chuẩn phân tích kỹ thuật và quản lý vốn nâng cao:
+Dự án gồm 5 Robot Giao Dịch Tự Động (**Expert Advisors - EA**) viết bằng ngôn ngữ **MQL5 thuần túy**, được thiết kế theo các tiêu chuẩn phân tích kỹ thuật và quản lý vốn nâng cao:
 
-1. **`ZenithSniper_M15_EA.mq5` (CHUYÊN BIỆT CHO VÀNG XAUUSD / VỐN 100$)** — **Robot Bắn Tỉa Vàng M15 v4.0**: Tối ưu độc quyền cho Vàng (XAUUSD) với vốn nhỏ $100, tích hợp công nghệ Chống quét râu nến (Anti-Wick Hunt), DBB, Smart Pyramiding nhồi lệnh dương, lọc tin đỏ USD và không khóa tài khoản. Có cẩm nang: [`HUONG_DAN_ZENITHSNIPER_M15_100U.md`](file:///c:/Users/AD/Documents/BotTrade/HUONG_DAN_ZENITHSNIPER_M15_100U.md).
-2. **`ApexConfluence_EA.mq5`** — **Hệ thống Hội Tụ Đa Chỉ Báo (Multi-Confluence)**: Lợi Nhuận Cao, Rủi Ro Cực Thấp với cơ chế Bảo Vệ Vốn Đa Tầng, Chốt Lời Từng Phần (Partial Close), Trailing Stop ATR và Dashboard trực quan.
-3. **`BreakoutSR_EA.mq5`** — Chiến lược Breakout Hỗ trợ & Kháng cự kinh điển kết hợp ATR Stop Loss và Trailing Stop.
-4. **`TitanGold_Pro_EA.mq5`** & **`CHIEN_LUOC_VANG_XAUUSD.md`** — Chuyên biệt hóa cho giao dịch Vàng (XAUUSD).
-5. **`TAI_LIEU_FOREX_NANG_CAO.md`** — Toàn văn giáo trình 16 bài học Forex nâng cao (Unit 15 - Unit 30 từ Scribd).
-6. **`GIAO_TRINH_FX_ACADEMY.md`** — Toàn bộ hệ thống kiến thức, chiến lược độc quyền (Double Bollinger Bands, Pin Bar, ATR Volatility) từ Học viện quốc tế [FX Academy](https://www.fxacademy.com/).
-7. **`GIAO_TRINH_PRICE_ACTION_NIAL_FULLER.md`** — Tinh hoa Price Action Biểu Đồ Trần (Naked Chart), Mô hình T.L.S, Pin Bar 50% Retracement, Inside Bar & Fakey từ [LearnToTradeTheMarket.com](https://www.learntotradethemarket.com/) (Nial Fuller).
-8. **`GIAO_TRINH_FOREXBROKERS_COM.md`** — Cẩm nang hạ tầng thực chiến, Tiêu chuẩn an toàn Trust Score, Mô hình sàn ECN/STP, Chi phí ẩn, So sánh MT4 vs MT5 và Quy chuẩn vận hành Bot Algo từ [ForexBrokers.com](https://www.forexbrokers.com/).
+1. **`QuantumPulse_Scalper_EA.mq5` (CHUYÊN BIỆT ĐỘC QUYỀN CHO VÀNG XAUUSD)** — **Robot Lướt Sóng Xung Lực Vàng M5 v2.0 (Momentum Gold Scalper - Tần suất ~1 lệnh/giờ)**: Chuyên biệt hóa 100% cho Vàng (XAUUSD). Tự động khóa nếu gắn nhầm cặp tiền khác, tích hợp cơ chế Chống quét râu nến Vàng (Anti-Wick Hunt), Đo sốc biến động (Volatility Shock Spike), Chốt lời 2 tầng (Dual-TP), Auto Break-Even siêu tốc bù spread Vàng và HUD Dashboard Gold sang trọng. Có cẩm nang: [`HUONG_DAN_QUANTUMPULSE_SCALPER.md`](file:///c:/Users/AD/Documents/BotTrade/HUONG_DAN_QUANTUMPULSE_SCALPER.md).
+2. **`ZenithSniper_M15_EA.mq5` (CHUYÊN BIỆT CHO VÀNG XAUUSD / VỐN 100$)** — **Robot Bắn Tỉa Vàng M15 v4.0**: Tối ưu độc quyền cho Vàng (XAUUSD) với vốn nhỏ $100, tích hợp công nghệ Chống quét râu nến (Anti-Wick Hunt), DBB, Smart Pyramiding nhồi lệnh dương, lọc tin đỏ USD và không khóa tài khoản. Có cẩm nang: [`HUONG_DAN_ZENITHSNIPER_M15_100U.md`](file:///c:/Users/AD/Documents/BotTrade/HUONG_DAN_ZENITHSNIPER_M15_100U.md).
+3. **`ApexConfluence_EA.mq5`** — **Hệ thống Hội Tụ Đa Chỉ Báo (Multi-Confluence)**: Lợi Nhuận Cao, Rủi Ro Cực Thấp với cơ chế Bảo Vệ Vốn Đa Tầng, Chốt Lời Từng Phần (Partial Close), Trailing Stop ATR và Dashboard trực quan.
+4. **`BreakoutSR_EA.mq5`** — Chiến lược Breakout Hỗ trợ & Kháng cự kinh điển kết hợp ATR Stop Loss và Trailing Stop.
+5. **`TitanGold_Pro_EA.mq5`** & **`CHIEN_LUOC_VANG_XAUUSD.md`** — Chuyên biệt hóa cho giao dịch Vàng (XAUUSD).
+6. **`TAI_LIEU_FOREX_NANG_CAO.md`** — Toàn văn giáo trình 16 bài học Forex nâng cao (Unit 15 - Unit 30 từ Scribd).
+7. **`GIAO_TRINH_FX_ACADEMY.md`** — Toàn bộ hệ thống kiến thức, chiến lược độc quyền (Double Bollinger Bands, Pin Bar, ATR Volatility) từ Học viện quốc tế [FX Academy](https://www.fxacademy.com/).
+8. **`GIAO_TRINH_PRICE_ACTION_NIAL_FULLER.md`** — Tinh hoa Price Action Biểu Đồ Trần (Naked Chart), Mô hình T.L.S, Pin Bar 50% Retracement, Inside Bar & Fakey từ [LearnToTradeTheMarket.com](https://www.learntotradethemarket.com/) (Nial Fuller).
+9. **`GIAO_TRINH_FOREXBROKERS_COM.md`** — Cẩm nang hạ tầng thực chiến, Tiêu chuẩn an toàn Trust Score, Mô hình sàn ECN/STP, Chi phí ẩn, So sánh MT4 vs MT5 và Quy chuẩn vận hành Bot Algo từ [ForexBrokers.com](https://www.forexbrokers.com/).
 
 ---
 
