@@ -76,18 +76,19 @@ input double            InpDbbOuterDev          = 2.0;                 // Dai ng
 input double            InpDbbInnerDev          = 1.0;                 // Dai trong (1.0 SD)
 input bool              InpUseRsiFilter         = true;                // Loc xung luong qua ban/qua mua RSI
 input int               InpRsiPeriod            = 14;                  // Chu ky RSI
-input double            InpRsiBuyMin            = 40.0;                // RSI toi thieu de mua (Tranh bat dao roi sau)
-input double            InpRsiBuyMax            = 68.0;                // RSI toi da de mua (Tranh mua du dinh qua mua)
-input double            InpRsiSellMin           = 32.0;                // RSI toi thieu de ban (Tranh ban du day qua ban)
-input double            InpRsiSellMax           = 60.0;                // RSI toi da de ban (Tranh ban khi xung luc tang)
+input double            InpRsiBuyMin            = 36.0;                // RSI toi thieu de mua (Noi rong don song M5)
+input double            InpRsiBuyMax            = 72.0;                // RSI toi da de mua (Tranh mua du dinh qua mua)
+input double            InpRsiSellMin           = 28.0;                // RSI toi thieu de ban (Cho phep ban khi xu huong manh)
+input double            InpRsiSellMax           = 64.0;                // RSI toi da de ban (Noi rong don song M5)
 
 input group "=== 5. CHỐNG QUÉT RÂU VÀNG & ĐIỂM VÀO A+ (ANTI-WICK HUNT) ==="
 input ENUM_SCALP_TRIGGER_MODE InpTriggerMode    = TRIGGER_CONFLUENCE_ALL; // Che do kich hoat
-input double            InpMinWickRatioPinBar   = 0.60;                // Ty le rau nen Pin Bar Vang toi thieu (>= 60% rut chan)
-input double            InpMaxBodyRatioPinBar   = 0.28;                // Ty le than nen Pin Bar Vang toi da (<= 28%)
-input int               InpGoldBufferPoints     = 25;                  // Khoang dem phong ve chong quet rau (Points ~ $0.25 gia Vang)
+input double            InpMinWickRatioPinBar   = 0.50;                // Ty le rau nen Pin Bar Vang toi thieu (>= 50% rut chan, toi uu M5)
+input double            InpMaxBodyRatioPinBar   = 0.35;                // Ty le than nen Pin Bar Vang toi da (<= 35%)
+input int               InpGoldBufferPoints     = 35;                  // Khoang dem phong ve chong quet rau (Points ~ $0.35 gia Vang)
 input bool              InpRequireMinCandleSize = true;                // Yeu cau nến kich hoat co bien do toi thieu
-input double            InpMinCandleAtrFactor   = 0.50;                // Bien do nến >= 0.5x ATR (Loc bo nen doji tieng on)
+input double            InpMinCandleAtrFactor   = 0.40;                // Bien do nến >= 0.4x ATR (Loc bo nen doji tieng on)
+input bool              InpAllowMomentumBreakout= true;                // Cho phep vao lenh theo nen bứt phá đà mạnh (Momentum Trend Bar)
 
 input group "=== 6. BỘ LỌC TIN TỨC USD & SỐC BIẾN ĐỘNG VÀNG (NEWS & SHOCK) ==="
 input bool              InpUseNewsFilter        = true;                // Bat bo loc Tin tuc MQL5 Calendar (CPI, NFP, FOMC)
@@ -101,19 +102,19 @@ input double            InpVolSpikeThreshold    = 2.2;                 // Nguong
 input group "=== 7. QUẢN LÝ LỆNH VÀNG: STOP LOSS, TAKE PROFIT & TRAILING ==="
 input int               InpAtrPeriod            = 14;                  // Chu ky ATR do bien dong Vang
 input double            InpAtrMultiplierSL      = 1.6;                 // Khoang cach SL = 1.6x ATR Vang
-input int               InpMinSlPoints          = 180;                 // SL toi thieu cho Vang (Points ~ $1.8 gia Vang)
-input int               InpMaxSlPoints          = 450;                 // SL toi da cho phep tren Vang (Points ~ $4.5 gia)
+input int               InpMinSlPoints          = 250;                 // SL toi thieu cho Vang (Points ~ $2.5 gia, vuot spread Exness)
+input int               InpMaxSlPoints          = 950;                 // SL toi da cho phep tren Vang (Points ~ $9.5 gia, chuan XAUUSD $4100+)
 input double            InpRiskRewardRatio      = 2.0;                 // Ty le R:R muc tieu chinh (1:2.0 tren Vang)
 input bool              InpUsePartialClose      = true;                // Chot loi 50% khoi luong tai muc TP1 (Dual-TP)
-input double            InpPartialCloseAtR      = 1.0;                 // Chot loi 50% khi dat 1.0R (an chac ~$2.0-$3.0 gia Vang)
+input double            InpPartialCloseAtR      = 1.0;                 // Chot loi 50% khi dat 1.0R (an chac ~$2.5-$4.0 gia Vang)
 input double            InpPartialClosePercent  = 50.0;                // % Khoi luong can chot tai TP1
 input bool              InpUseAutoBreakEven     = true;                // Tu dong keo SL ve hoa von (Risk-Free)
 input double            InpBreakEvenTriggerR    = 0.8;                 // Keo hoa von khi gia Vang chay dat 0.8R
-input int               InpBreakEvenOffsetPts   = 25;                  // Bu phi spread Vang (Points ~ $0.25 tren Entry)
+input int               InpBreakEvenOffsetPts   = 30;                  // Bu phi spread Vang (Points ~ $0.30 tren Entry)
 input bool              InpUseTrailingStop      = true;                // Trailing Stop bam sat con song Vang
 input double            InpTrailingStartR       = 1.2;                 // Bat dau trailing khi loi nhuan >= 1.2R
-input double            InpTrailingDistanceATR  = 1.3;                 // Khoang cach trailing theo ATR Vang
-input int               InpTrailingStepPts      = 20;                  // Buoc nhay toi thieu dời SL (Points ~ $0.20 gia)
+input double            InpTrailingDistanceATR  = 1.4;                 // Khoang cach trailing theo ATR Vang
+input int               InpTrailingStepPts      = 25;                  // Buoc nhay toi thieu dời SL (Points ~ $0.25 gia)
 
 input group "=== 8. BỘ LỌC AN TOÀN SÀN & PHIÊN GIAO DỊCH VÀNG ==="
 input int               InpMaxSpreadPoints      = 350;                 // Spread toi da cho phep danh Vang (Points, Exness ~220-280 pts)
@@ -171,6 +172,121 @@ bool           m_isNewsRestricted        = false;
 datetime       m_lastReportTime          = 0;
 int            m_lastReportedSessionHour = -1;
 int            m_lastReportedSessionDay  = -1;
+
+//+------------------------------------------------------------------+
+//| STRUCT & HELPERS QUẢN LÝ RISK GỐC CHO TỪNG VỊ THẾ (VÁ LỖI C)     |
+//+------------------------------------------------------------------+
+struct SPosRiskRecord
+{
+   ulong  ticket;
+   double initialRiskPts;
+   bool   tp1Closed;
+};
+SPosRiskRecord m_posRisks[];
+
+void SetPosRiskRecord(ulong ticket, double initRiskPts)
+{
+   if(ticket == 0 || initRiskPts <= 0.0) return;
+   int size = ArraySize(m_posRisks);
+   for(int i = 0; i < size; i++)
+   {
+      if(m_posRisks[i].ticket == ticket)
+      {
+         m_posRisks[i].initialRiskPts = initRiskPts;
+         return;
+      }
+   }
+   ArrayResize(m_posRisks, size + 1);
+   m_posRisks[size].ticket = ticket;
+   m_posRisks[size].initialRiskPts = initRiskPts;
+   m_posRisks[size].tp1Closed = false;
+}
+
+double GetPosInitialRiskPts(ulong ticket, double openPrice, double curTp, double curSl, double curAtr)
+{
+   int size = ArraySize(m_posRisks);
+   for(int i = 0; i < size; i++)
+   {
+      if(m_posRisks[i].ticket == ticket && m_posRisks[i].initialRiskPts > 0.0)
+      {
+         return m_posRisks[i].initialRiskPts;
+      }
+   }
+
+   double point = m_symbol.Point();
+   double riskPts = 0.0;
+
+   // 1. Tinh tu Take Profit goc (TP khong bao gio bi dời khi BE hay Trailing)
+   if(curTp > 0.0 && InpRiskRewardRatio > 0.0 && point > 0.0)
+   {
+      riskPts = (MathAbs(openPrice - curTp) / point) / InpRiskRewardRatio;
+   }
+
+   // 2. Neu SL hien tai chua bi keo ve gan Entry
+   if(riskPts < (double)InpMinSlPoints && curSl > 0.0 && point > 0.0)
+   {
+      double distSl = MathAbs(openPrice - curSl) / point;
+      if(distSl >= (double)InpMinSlPoints) riskPts = distSl;
+   }
+
+   // 3. Fallback theo ATR Vang
+   if(riskPts < (double)InpMinSlPoints)
+   {
+      if(curAtr > 0.0 && point > 0.0)
+         riskPts = curAtr * InpAtrMultiplierSL / point;
+      else
+         riskPts = 350.0;
+   }
+
+   riskPts = MathMax(riskPts, (double)InpMinSlPoints);
+   riskPts = MathMin(riskPts, (double)InpMaxSlPoints);
+
+   SetPosRiskRecord(ticket, riskPts);
+   return riskPts;
+}
+
+bool IsPosTp1Closed(ulong ticket)
+{
+   int size = ArraySize(m_posRisks);
+   for(int i = 0; i < size; i++)
+   {
+      if(m_posRisks[i].ticket == ticket) return m_posRisks[i].tp1Closed;
+   }
+   return false;
+}
+
+void MarkPosTp1Closed(ulong ticket)
+{
+   int size = ArraySize(m_posRisks);
+   for(int i = 0; i < size; i++)
+   {
+      if(m_posRisks[i].ticket == ticket)
+      {
+         m_posRisks[i].tp1Closed = true;
+         return;
+      }
+   }
+   SetPosRiskRecord(ticket, 350.0);
+   int newSize = ArraySize(m_posRisks);
+   if(newSize > 0) m_posRisks[newSize - 1].tp1Closed = true;
+}
+
+void CleanClosedPosRecords()
+{
+   int size = ArraySize(m_posRisks);
+   for(int i = size - 1; i >= 0; i--)
+   {
+      if(!PositionSelectByTicket(m_posRisks[i].ticket))
+      {
+         for(int j = i; j < size - 1; j++)
+         {
+            m_posRisks[j] = m_posRisks[j + 1];
+         }
+         size--;
+         ArrayResize(m_posRisks, size);
+      }
+   }
+}
 
 //+------------------------------------------------------------------+
 //| HAM KIEM TRA BIEU DO CO PHAI LA VANG KHONG                       |
@@ -462,12 +578,15 @@ void OnTick()
       }
    }
 
-   // 15. Nhan dien Trigger Price Action tren Vang (Pin Bar rut chan & Engulfing)
+   // 15. Nhan dien Trigger Price Action tren Vang (Pin Bar rut chan, Engulfing & Momentum Bar)
    bool isBullPin = false, isBearPin = false;
    DetectPinBar(rates[1], isBullPin, isBearPin);
 
    bool isBullEngulf = false, isBearEngulf = false;
    DetectEngulfing(rates[1], rates[2], isBullEngulf, isBearEngulf);
+
+   bool isBullMom = false, isBearMom = false;
+   DetectMomentumBar(rates[1], atr[1], isBullMom, isBearMom);
 
    // 16. TONG HOP TIN HIEU VAO LENH A+ CHO VANG (HIGH-PROBABILITY CONFLUENCE)
    bool buyTrigger = false;
@@ -477,14 +596,14 @@ void OnTick()
    // 1. HTF Trend phai Tang hoac Neutral cho phep (htfTrend >= 0)
    // 2. Gia vua Pullback vao Vung gia tri M5 (inBuyValueArea) HOAC nam trong DBB Buy Zone
    // 3. Xung luong RSI nam trong khoang lướt an toan (rsiBuyOk)
-   // 4. Nen dong cuoi (Bar 1) kich hoat Bullish Pin Bar hoac Bullish Engulfing
+   // 4. Nen dong cuoi (Bar 1) kich hoat Bullish Pin Bar, Bullish Engulfing hoac Momentum Bar
    if(htfTrend >= 0 && rsiBuyOk)
    {
       bool triggerPattern = false;
       if(InpTriggerMode == TRIGGER_CONFLUENCE_ALL)
-         triggerPattern = (isBullPin || isBullEngulf) && (inBuyValueArea || dbbZone >= 0);
+         triggerPattern = (isBullPin || isBullEngulf || (InpAllowMomentumBreakout && isBullMom)) && (inBuyValueArea || dbbZone >= 0);
       else if(InpTriggerMode == TRIGGER_PRICE_ACTION)
-         triggerPattern = (isBullPin || isBullEngulf);
+         triggerPattern = (isBullPin || isBullEngulf || (InpAllowMomentumBreakout && isBullMom));
       else if(InpTriggerMode == TRIGGER_DBB_MOMENTUM)
          triggerPattern = (dbbZone == 1 && rates[1].close > rates[2].high);
 
@@ -498,14 +617,14 @@ void OnTick()
    // 1. HTF Trend phai Giam hoac Neutral cho phep (htfTrend <= 0)
    // 2. Gia vua Pullback vao Vung gia tri M5 (inSellValueArea) HOAC nam trong DBB Sell Zone
    // 3. Xung luong RSI nam trong khoang lướt an toan (rsiSellOk)
-   // 4. Nen dong cuoi (Bar 1) kich hoat Bearish Pin Bar hoac Bearish Engulfing
+   // 4. Nen dong cuoi (Bar 1) kich hoat Bearish Pin Bar, Bearish Engulfing hoac Momentum Bar
    if(htfTrend <= 0 && rsiSellOk)
    {
       bool triggerPattern = false;
       if(InpTriggerMode == TRIGGER_CONFLUENCE_ALL)
-         triggerPattern = (isBearPin || isBearEngulf) && (inSellValueArea || dbbZone <= 0);
+         triggerPattern = (isBearPin || isBearEngulf || (InpAllowMomentumBreakout && isBearMom)) && (inSellValueArea || dbbZone <= 0);
       else if(InpTriggerMode == TRIGGER_PRICE_ACTION)
-         triggerPattern = (isBearPin || isBearEngulf);
+         triggerPattern = (isBearPin || isBearEngulf || (InpAllowMomentumBreakout && isBearMom));
       else if(InpTriggerMode == TRIGGER_DBB_MOMENTUM)
          triggerPattern = (dbbZone == -1 && rates[1].close < rates[2].low);
 
@@ -537,7 +656,13 @@ void OnTick()
    else
    {
       m_lastBarTime = currentBarTime;
-      m_lastSignalDesc = "QUAN SÁT: Chờ setup hội tụ Vàng A+";
+      string reason = "Chờ setup A+";
+      if(htfTrend == 1 && !rsiBuyOk) reason = "Chờ RSI Buy (36-72)";
+      else if(htfTrend == -1 && !rsiSellOk) reason = "Chờ RSI Sell (28-64)";
+      else if(htfTrend == 0) reason = "Chờ xu hướng H1";
+      else reason = "Chờ nến xác nhận M5";
+
+      m_lastSignalDesc = StringFormat("QUAN SÁT: %s", reason);
       m_signalColor    = clrGold;
    }
 }
@@ -804,6 +929,30 @@ void DetectEngulfing(const MqlRates &cur, const MqlRates &prev, bool &isBullEngu
 }
 
 //+------------------------------------------------------------------+
+//| NHAN DIEN NEN BUT PHA DONG LUONG MANH (MOMENTUM TREND BAR)      |
+//+------------------------------------------------------------------+
+void DetectMomentumBar(const MqlRates &bar, double curAtr, bool &isBullMom, bool &isBearMom)
+{
+   isBullMom = false;
+   isBearMom = false;
+
+   double body = MathAbs(bar.close - bar.open);
+   double range = bar.high - bar.low;
+   if(range <= 0.0) return;
+
+   // Nen tang manh: Than nen chiem >= 50% bien do, chieu cao >= 0.5x ATR
+   if(bar.close > bar.open && (body / range >= 0.50) && (range >= curAtr * 0.50))
+   {
+      isBullMom = true;
+   }
+   // Nen giam manh: Than nen chiem >= 50% bien do, chieu cao >= 0.5x ATR
+   else if(bar.close < bar.open && (body / range >= 0.50) && (range >= curAtr * 0.50))
+   {
+      isBearMom = true;
+   }
+}
+
+//+------------------------------------------------------------------+
 //| KIEM TRA CO DUOC PHEP MO HOAC NHOI LENH VANG KHONG               |
 //+------------------------------------------------------------------+
 bool CanExecutePyramid(ENUM_POSITION_TYPE type)
@@ -863,21 +1012,27 @@ void SyncAllStopLoss(ENUM_POSITION_TYPE type, double newSl)
       if(type == POSITION_TYPE_BUY)
       {
          double safeBe = NormalizeDouble(openPrice + InpBreakEvenOffsetPts * point, _Digits);
-         double targetSl = MathMax(safeBe, curSl);
+         // Dong bo ve SL moi cua lenh nhoi hoac it nhat la moc Hoa von (Break-even)
+         double targetSl = (newSl > 0.0) ? MathMax(safeBe, newSl) : safeBe;
+         targetSl = MathMax(targetSl, curSl);
          if(curSl < targetSl)
          {
             m_trade.PositionModify(ticket, targetSl, curTp);
-            Print(">> [SYNC SL BUY VANG] Da bao ve lenh ticket ", ticket, " ve moc hoa von: ", targetSl);
+            PrintFormat(">> [SYNC SL BUY VANG] Da dong bo SL ticket %I64u len moc: %.2f (BE: %.2f | NewSL: %.2f)",
+                        ticket, targetSl, safeBe, newSl);
          }
       }
       else if(type == POSITION_TYPE_SELL)
       {
          double safeBe = NormalizeDouble(openPrice - InpBreakEvenOffsetPts * point, _Digits);
-         double targetSl = (curSl == 0.0) ? safeBe : MathMin(safeBe, curSl);
+         // Dong bo ve SL moi cua lenh nhoi hoac it nhat la moc Hoa von (Break-even)
+         double targetSl = (newSl > 0.0) ? MathMin(safeBe, newSl) : safeBe;
+         targetSl = (curSl == 0.0) ? targetSl : MathMin(targetSl, curSl);
          if(curSl > targetSl || curSl == 0.0)
          {
             m_trade.PositionModify(ticket, targetSl, curTp);
-            Print(">> [SYNC SL SELL VANG] Da bao ve lenh ticket ", ticket, " ve moc hoa von: ", targetSl);
+            PrintFormat(">> [SYNC SL SELL VANG] Da dong bo SL ticket %I64u xuong moc: %.2f (BE: %.2f | NewSL: %.2f)",
+                        ticket, targetSl, safeBe, newSl);
          }
       }
    }
@@ -936,11 +1091,14 @@ void ExecuteOrder(ENUM_POSITION_TYPE posType, const MqlRates &lastBar, double cu
       if(m_trade.Buy(lot, _Symbol, entryPrice, slPrice, tpPrice, comment))
       {
          m_lastEntryTime  = TimeCurrent();
+         ulong posTicket = m_trade.ResultOrder();
+         if(posTicket > 0) SetPosRiskRecord(posTicket, slDistancePoints);
+
          m_lastSignalDesc = StringFormat("%s BUY VÀNG KHỚP: Lot %.2f @ %.2f (SL: %.2f | TP: %.2f)",
                                          (isPyramidEntry ? "[NHỒI]" : "[MỞ]"), lot, entryPrice, slPrice, tpPrice);
          m_signalColor    = clrLimeGreen;
-         PrintFormat(">>> [%s GOLD BUY] Lot: %.2f | Gia: %.2f | SL: %.2f | TP: %.2f", 
-                     (isPyramidEntry ? "NHOI LENH" : "MO LENH"), lot, entryPrice, slPrice, tpPrice);
+         PrintFormat(">>> [%s GOLD BUY] Lot: %.2f | Gia: %.2f | SL: %.2f | TP: %.2f (Risk: %.1f pts)", 
+                     (isPyramidEntry ? "NHOI LENH" : "MO LENH"), lot, entryPrice, slPrice, tpPrice, slDistancePoints);
 
          if(isPyramidEntry && InpSyncStopLossOnPyramid)
          {
@@ -970,11 +1128,14 @@ void ExecuteOrder(ENUM_POSITION_TYPE posType, const MqlRates &lastBar, double cu
       if(m_trade.Sell(lot, _Symbol, entryPrice, slPrice, tpPrice, comment))
       {
          m_lastEntryTime  = TimeCurrent();
+         ulong posTicket = m_trade.ResultOrder();
+         if(posTicket > 0) SetPosRiskRecord(posTicket, slDistancePoints);
+
          m_lastSignalDesc = StringFormat("%s SELL VÀNG KHỚP: Lot %.2f @ %.2f (SL: %.2f | TP: %.2f)",
                                          (isPyramidEntry ? "[NHỒI]" : "[MỞ]"), lot, entryPrice, slPrice, tpPrice);
          m_signalColor    = clrTomato;
-         PrintFormat(">>> [%s GOLD SELL] Lot: %.2f | Gia: %.2f | SL: %.2f | TP: %.2f", 
-                     (isPyramidEntry ? "NHOI LENH" : "MO LENH"), lot, entryPrice, slPrice, tpPrice);
+         PrintFormat(">>> [%s GOLD SELL] Lot: %.2f | Gia: %.2f | SL: %.2f | TP: %.2f (Risk: %.1f pts)", 
+                     (isPyramidEntry ? "NHOI LENH" : "MO LENH"), lot, entryPrice, slPrice, tpPrice, slDistancePoints);
 
          if(isPyramidEntry && InpSyncStopLossOnPyramid)
          {
@@ -1066,9 +1227,9 @@ void ManageOpenPositions()
       double volume    = m_position.Volume();
       ENUM_POSITION_TYPE type = m_position.PositionType();
 
-      // Tinh Initial Risk tu khoang cach SL ban dau cua Vang
-      double initialRiskPts = MathAbs(openPrice - curSl) / point;
-      if(initialRiskPts <= 0) initialRiskPts = 200.0; // Mac dinh ~2 gia Vang
+      // Tinh Initial Risk chuan xac tu struct bo nho hoac TakeProfit goc (VÁ TRIỆT ĐỂ LỖI C)
+      double initialRiskPts = GetPosInitialRiskPts(ticket, openPrice, curTp, curSl, curAtr);
+      if(initialRiskPts <= 0.0) initialRiskPts = 350.0;
 
       // 1. XU LY CHO LENH BUY VANG
       if(type == POSITION_TYPE_BUY)
@@ -1076,14 +1237,15 @@ void ManageOpenPositions()
          double profitPoints = (bid - openPrice) / point;
          double profitR      = profitPoints / initialRiskPts;
 
-         // A. CHOT LOI TUNG PHAN (PARTIAL CLOSE DUAL-TP CHO VANG)
-         if(InpUsePartialClose && profitR >= InpPartialCloseAtR && volume > m_symbol.LotsMin())
+         // A. CHOT LOI TUNG PHAN (PARTIAL CLOSE DUAL-TP CHO VANG) - Chi chot 1 lan duy nhat
+         if(InpUsePartialClose && !IsPosTp1Closed(ticket) && profitR >= InpPartialCloseAtR && volume > m_symbol.LotsMin())
          {
             double closeVol = NormalizeLot(volume * (InpPartialClosePercent / 100.0));
             if(closeVol >= m_symbol.LotsMin() && (volume - closeVol) >= m_symbol.LotsMin())
             {
                if(m_trade.PositionClosePartial(ticket, closeVol))
                {
+                  MarkPosTp1Closed(ticket);
                   PrintFormat(">> [GOLD DUAL-TP1 BUY] Da chot 50%% volume (%.2f lot) tai +%.1fR!", closeVol, profitR);
                }
             }
@@ -1101,7 +1263,7 @@ void ManageOpenPositions()
          }
 
          // C. MICRO-ATR TRAILING STOP CHO VANG
-         if(InpUseTrailingStop && profitR >= InpTrailingStartR && curAtr > 0)
+         if(InpUseTrailingStop && profitR >= InpTrailingStartR && curAtr > 0.0)
          {
             double trailDist = curAtr * InpTrailingDistanceATR;
             double targetSl  = NormalizeDouble(bid - trailDist, _Digits);
@@ -1119,14 +1281,15 @@ void ManageOpenPositions()
          double profitPoints = (openPrice - ask) / point;
          double profitR      = profitPoints / initialRiskPts;
 
-         // A. CHOT LOI TUNG PHAN (PARTIAL CLOSE DUAL-TP CHO VANG)
-         if(InpUsePartialClose && profitR >= InpPartialCloseAtR && volume > m_symbol.LotsMin())
+         // A. CHOT LOI TUNG PHAN (PARTIAL CLOSE DUAL-TP CHO VANG) - Chi chot 1 lan duy nhat
+         if(InpUsePartialClose && !IsPosTp1Closed(ticket) && profitR >= InpPartialCloseAtR && volume > m_symbol.LotsMin())
          {
             double closeVol = NormalizeLot(volume * (InpPartialClosePercent / 100.0));
             if(closeVol >= m_symbol.LotsMin() && (volume - closeVol) >= m_symbol.LotsMin())
             {
                if(m_trade.PositionClosePartial(ticket, closeVol))
                {
+                  MarkPosTp1Closed(ticket);
                   PrintFormat(">> [GOLD DUAL-TP1 SELL] Da chot 50%% volume (%.2f lot) tai +%.1fR!", closeVol, profitR);
                }
             }
@@ -1144,7 +1307,7 @@ void ManageOpenPositions()
          }
 
          // C. MICRO-ATR TRAILING STOP CHO VANG
-         if(InpUseTrailingStop && profitR >= InpTrailingStartR && curAtr > 0)
+         if(InpUseTrailingStop && profitR >= InpTrailingStartR && curAtr > 0.0)
          {
             double trailDist = curAtr * InpTrailingDistanceATR;
             double targetSl  = NormalizeDouble(ask + trailDist, _Digits);
@@ -1157,6 +1320,9 @@ void ManageOpenPositions()
          }
       }
    }
+
+   // Don dep ve cac vi the da dong khoi bo nho quan ly
+   CleanClosedPosRecords();
 }
 
 //+------------------------------------------------------------------+

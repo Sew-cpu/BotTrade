@@ -45,12 +45,12 @@ Vàng là "ông vua biến động" trong thị trường tài chính:
 * Nếu Vàng giật giá bất thường do tin giật gân hoặc cá mập quét lệnh, bot lập tức tạm dừng để tránh bị trượt giá (slippage).
 
 ### 2.5. Stop Loss, Take Profit & Quản Lý Lệnh Thực Chiến
-* **SL Động:** $1.6 \times \text{ATR}(14)$ hoặc Đáy/Đỉnh nến Pin Bar cộng thêm **đệm an toàn $25 \text{ points}$** ($0.25 giá Vàng).
-* **SL Kẹp an toàn:** Tối thiểu **$1.8 giá** (180 points) và tối đa **$4.5 giá** (450 points).
-* **TP Toàn phần:** Tỷ lệ Risk:Reward **1:2.0** (mục tiêu ăn từ $3.5 - $8.0 giá Vàng).
-* **Chốt lời TP1 (50% khối lượng):** Khi giá chạy được **$+1.0\text{R}$** (lãi khoảng $1.8 - $2.5 giá), bot lập tức chốt $50\%$ khối lượng để bỏ tiền vào túi.
-* **Auto Break-Even:** Khi giá chạy được **$+0.8\text{R}$**, tự động dời SL về Entry $+ 25 \text{ points}$ bù phí spread (hoàn toàn không còn rủi ro).
-* **Micro-ATR Trailing Stop:** Khi giá vượt $+1.2\text{R}$, SL bám đuôi theo khoảng cách $1.3 \times \text{ATR}$ với bước nhảy mịn $20 \text{ points}$ ($0.20 giá).
+* **SL Động:** $1.6 \times \text{ATR}(14)$ hoặc Đáy/Đỉnh nến Pin Bar cộng thêm **đệm an toàn $35 \text{ points}$** ($0.35 giá Vàng).
+* **SL Kẹp an toàn:** Tối thiểu **$2.5 giá** (250 points, vượt mức spread giãn của Exness) và tối đa **$9.5 giá** (950 points, phù hợp biến động thực tế của XAUUSD ở mốc $4,100+).
+* **TP Toàn phần:** Tỷ lệ Risk:Reward **1:2.0** (mục tiêu ăn từ $5.0 - $18.0 giá Vàng).
+* **Chốt lời TP1 (50% khối lượng):** Khi giá chạy được **$+1.0\text{R}$** (lãi khoảng $2.5 - $4.0 giá), bot lập tức chốt $50\%$ khối lượng để bảo toàn lợi nhuận.
+* **Auto Break-Even:** Khi giá chạy được **$+0.8\text{R}$**, tự động dời SL về Entry $+ 30 \text{ points}$ bù phí spread (hoàn toàn không còn rủi ro).
+* **Micro-ATR Trailing Stop:** Khi giá vượt $+1.2\text{R}$, SL bám đuôi theo khoảng cách $1.4 \times \text{ATR}$ với bước nhảy $25 \text{ points}$ ($0.25 giá).
 
 ---
 
