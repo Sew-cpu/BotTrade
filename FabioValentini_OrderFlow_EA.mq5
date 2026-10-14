@@ -37,10 +37,11 @@ input double               InpFixedLotIfNoDynamic  = 0.01;                    //
 input bool                 InpUseDynamicSizing     = true;                    // Bật tính Lot động theo Risk Budget
 
 input group "=== 2. Nhận diện Vùng Tích lũy (Market Range Detection) ==="
-input int                  InpRangeLookbackBars    = 15;                      // Số nến dò biên tích lũy (15 nến trên M1/M5)
-input double               InpMaxRangeWidthATR     = 4.5;                     // Biên độ hộp tối đa (x ATR) - Chặn hộp quá rộng
-input double               InpMinRangeWidthATR     = 0.4;                     // Biên độ hộp tối thiểu (x ATR) - Chặn hộp quá hẹp
-input int                  InpHTFTrendEMAPeriod    = 200;                     // EMA xu hướng khung lớn (Lọc thiên kiến chỉ đánh 1 chiều)
+input int                  InpRangeLookbackBars    = 10;                      // Số nến dò biên tích lũy (10 nến trên M1/M5)
+input double               InpMaxRangeWidthATR     = 7.0;                     // Biên độ hộp tối đa (x ATR) - Chặn hộp quá rộng
+input double               InpMinRangeWidthATR     = 0.2;                     // Biên độ hộp tối thiểu (x ATR) - Chặn hộp quá hẹp
+input bool                 InpUseHTFTrendFilter    = false;                   // Bật lọc xu hướng HTF EMA200 (False = Đánh cả 2 chiều BUY & SELL linh hoạt)
+input int                  InpHTFTrendEMAPeriod    = 200;                     // EMA xu hướng khung lớn (nếu bật bộ lọc)
 input ENUM_TIMEFRAMES      InpHTFTimeframe         = PERIOD_CURRENT;          // Khung xu hướng lớn (PERIOD_CURRENT: Tự chọn M15 nếu chart M1, H1 nếu chart M5)
 
 input group "=== 3. Lọc Tin Tức Đỏ USD & Đếm Ngược (Economic Calendar) ==="
@@ -78,6 +79,7 @@ ENUM_TIMEFRAMES g_activeHTF   = PERIOD_H1;
 
 //--- Biến trạng thái Range & Tin Tức
 datetime       g_lastBarTime          = 0;
+datetime       g_lastEntryBarTime     = 0;
 double         g_rangeHigh            = 0.0;
 double         g_rangeLow             = 0.0;
 bool           g_rangeValid           = false;
@@ -340,7 +342,9 @@ bool DetectConsolidationRange(double &rangeHigh, double &rangeLow, double curren
    if(currentATR <= 0.0) return false;
 
    MqlRates rates[];
-   if(CopyRates(_Symbol, _Period, 1, InpRangeLookbackBars, rates) < InpRangeLookbackBars)
+   ArraySetAsSeries(rates, true);
+   // Quét InpRangeLookbackBars nến trước nến tín hiệu (bắt đầu từ nến 2 trở về trước)
+   if(CopyRates(_Symbol, _Period, 2, InpRangeLookbackBars, rates) < InpRangeLookbackBars)
       return false;
 
    double highest = rates[0].high;
@@ -605,27 +609,35 @@ void UpdateChartHUD()
    SetHudLabel("VALENTINI_HUD_L6", StringFormat("📰 Lịch Tin USD: %s", g_newsStatusText),
                panelX + 12, startY + lineH * 5, g_newsStatusClr, 8, true);
 
-   // Dòng 7: Xu Hướng HTF
-   double htfEMA[1];
-   string trendStr = "CHỜ TÍN HIỆU";
-   color  trendClr = clrSilver;
-   if(CopyBuffer(g_handleHTFEMA, 0, 1, 1, htfEMA) == 1)
+   // Dòng 7: Xu Hướng / Thiên kiến
+   if(InpUseHTFTrendFilter)
      {
-      double closePrice = iClose(_Symbol, _Period, 1);
-      if(closePrice > htfEMA[0])
+      double htfEMA[1];
+      string trendStr = "CHỜ TÍN HIỆU";
+      color  trendClr = clrSilver;
+      if(CopyBuffer(g_handleHTFEMA, 0, 1, 1, htfEMA) == 1)
         {
-         trendStr = "BULLISH 🟢 (Chỉ Canh Buy)";
-         trendClr = clrLime;
+         double closePrice = iClose(_Symbol, _Period, 1);
+         if(closePrice > htfEMA[0])
+           {
+            trendStr = "BULLISH 🟢 (Chỉ Canh Buy)";
+            trendClr = clrLime;
+           }
+         else
+           {
+            trendStr = "BEARISH 🔴 (Chỉ Canh Sell)";
+            trendClr = clrTomato;
+           }
         }
-      else
-        {
-         trendStr = "BEARISH 🔴 (Chỉ Canh Sell)";
-         trendClr = clrTomato;
-        }
+      string htfName = StringSubstr(EnumToString(g_activeHTF), 7);
+      SetHudLabel("VALENTINI_HUD_L7", StringFormat("🧭 Thiên Kiến Lớn (%s EMA%d): %s", htfName, InpHTFTrendEMAPeriod, trendStr),
+                  panelX + 12, startY + lineH * 6, trendClr, 9);
      }
-   string htfName = StringSubstr(EnumToString(g_activeHTF), 7);
-   SetHudLabel("VALENTINI_HUD_L7", StringFormat("🧭 Thiên Kiến Lớn (%s EMA%d): %s", htfName, InpHTFTrendEMAPeriod, trendStr),
-               panelX + 12, startY + lineH * 6, trendClr, 9);
+   else
+     {
+      SetHudLabel("VALENTINI_HUD_L7", "🧭 Thiên Kiến: HAI CHIỀU 🟢🔴 (BUY & SELL Linh Hoạt)",
+                  panelX + 12, startY + lineH * 6, clrAqua, 9, true);
+     }
 
    // Dòng 8: Trạng thái Pyramiding (Nhồi Lệnh)
    string pyrStr = "CHƯA CÓ LỆNH (Sẵn sàng Base 50%)";
@@ -890,6 +902,9 @@ void OnTick()
      }
 
    // 7. KIỂM TRA ĐIỀU KIỆN MỞ LỆNH GỐC (BASE POSITION - 50% RISK)
+   datetime currentBar = iTime(_Symbol, _Period, 0);
+   if(currentBar == g_lastEntryBarTime) return;
+
    MqlDateTime gmt;
    TimeToStruct(GetGMTTime(), gmt);
    bool is24h = (InpStartHourGMT == 0 && InpEndHourGMT >= 24);
@@ -903,15 +918,21 @@ void OnTick()
 
    if(!g_rangeValid) return;
 
-   // Kiểm tra Thiên kiến Xu hướng Khung Lớn (HTF Trend Filter)
-   double htfEMA[1];
-   if(CopyBuffer(g_handleHTFEMA, 0, 1, 1, htfEMA) != 1) return;
-   double htfEMAPrice = htfEMA[0];
+   // Kiểm tra Thiên kiến Xu hướng Khung Lớn (HTF Trend Filter nếu bật)
+   double htfEMAPrice = 0.0;
+   if(InpUseHTFTrendFilter)
+     {
+      double htfEMA[1];
+      if(CopyBuffer(g_handleHTFEMA, 0, 1, 1, htfEMA) != 1) return;
+      htfEMAPrice = htfEMA[0];
+     }
 
-   MqlRates rates[2];
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
    if(CopyRates(_Symbol, _Period, 1, 2, rates) < 2) return;
-   double close1 = rates[1].close;
-   double prevC1 = rates[0].close;
+   // rates[0] là nến 1 (vừa đóng), rates[1] là nến 2 (trước đó)
+   double close1 = rates[0].close;
+   double prevC1 = rates[1].close;
 
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
@@ -921,18 +942,18 @@ void OnTick()
 
    if(InpEntryStyle == ENTRY_BREAKOUT_DIRECT)
      {
-      // Breakout trực tiếp khi giá phá biên Range
-      buyBreakout  = (close1 > g_rangeHigh) && (close1 > htfEMAPrice);
-      sellBreakout = (close1 < g_rangeLow)  && (close1 < htfEMAPrice);
+      // Breakout trực tiếp khi nến vừa đóng vượt qua đỉnh/đáy hộp
+      buyBreakout  = (close1 > g_rangeHigh) && (!InpUseHTFTrendFilter || close1 > htfEMAPrice);
+      sellBreakout = (close1 < g_rangeLow)  && (!InpUseHTFTrendFilter || close1 < htfEMAPrice);
      }
-   else // ENTRY_PULLBACK_RETEST (Phong cách Nhật Hoài)
+   else // ENTRY_PULLBACK_RETEST (Phong cách Retest)
      {
       // Chờ nến trước phá biên, nến này hồi test biên rồi rút râu thuận xu hướng
-      bool buyRetest  = (prevC1 > g_rangeHigh) && (rates[1].low <= g_rangeHigh + 0.3 * currentATR) && (close1 > g_rangeHigh);
-      bool sellRetest = (prevC1 < g_rangeLow)  && (rates[1].high >= g_rangeLow - 0.3 * currentATR) && (close1 < g_rangeLow);
+      bool buyRetest  = (prevC1 > g_rangeHigh) && (rates[0].low <= g_rangeHigh + 0.3 * currentATR) && (close1 > g_rangeHigh);
+      bool sellRetest = (prevC1 < g_rangeLow)  && (rates[0].high >= g_rangeLow - 0.3 * currentATR) && (close1 < g_rangeLow);
 
-      buyBreakout  = buyRetest  && (close1 > htfEMAPrice);
-      sellBreakout = sellRetest && (close1 < htfEMAPrice);
+      buyBreakout  = buyRetest  && (!InpUseHTFTrendFilter || close1 > htfEMAPrice);
+      sellBreakout = sellRetest && (!InpUseHTFTrendFilter || close1 < htfEMAPrice);
      }
 
    if(!buyBreakout && !sellBreakout) return;
@@ -954,6 +975,7 @@ void OnTick()
            {
             g_activePyramidStage = PYRAMID_BASE;
             g_tradeDirection     = 1;
+            g_lastEntryBarTime   = currentBar;
             PrintFormat("BASE BUY ORDER EXECUTED: Lot %.2f @ %.2f | SL: %.2f", lot, ask, sl);
            }
         }
@@ -971,6 +993,7 @@ void OnTick()
            {
             g_activePyramidStage = PYRAMID_BASE;
             g_tradeDirection     = -1;
+            g_lastEntryBarTime   = currentBar;
             PrintFormat("BASE SELL ORDER EXECUTED: Lot %.2f @ %.2f | SL: %.2f", lot, bid, sl);
            }
         }
