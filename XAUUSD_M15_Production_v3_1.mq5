@@ -67,9 +67,11 @@ input double               InpTrailStepATR         = 0.25;                    //
 
 input group "=== 3. Chỉ số Lọc Điểm Đẹp & Setup A+ (Confluence Engine) ==="
 input bool                 InpRequireAPlusSetup    = true;                    // Bật bộ lọc chỉ bắn tỉa Setup A+ Confluence
-input int                  InpMinConfluenceScore   = 80;                      // Điểm số tối thiểu để vào lệnh (>= 80: A+ Setup)
-input double               InpMinPinBarWickRatio   = 0.60;                    // Tỷ lệ râu nến Pin Bar tối thiểu (60%)
-input double               InpMaxPinBarBodyRatio   = 0.35;                    // Tỷ lệ thân nến Pin Bar tối đa (35%)
+input int                  InpMinConfluenceScore   = 70;                      // Điểm số tối thiểu để vào lệnh (>= 70: Chuẩn A/A+ Tối ưu số lệnh)
+input double               InpMinPinBarWickRatio   = 0.50;                    // Tỷ lệ râu nến Pin Bar tối thiểu (50%)
+input double               InpMaxPinBarBodyRatio   = 0.40;                    // Tỷ lệ thân nến Pin Bar tối đa (40%)
+input int                  InpMaxSimultaneousPos   = 2;                       // Số vị thế mở tối đa đồng thời (1 - 2)
+input bool                 InpAllowReentryOnBE     = true;                    // Chỉ cho phép mở lệnh 2 khi lệnh 1 đã dời Hòa Vốn (Free-Risk)
 input int                  InpEMAFastPeriod        = 50;                      // Chu kỳ EMA Trung hạn
 input int                  InpEMASlowPeriod        = 200;                     // Chu kỳ EMA Dài hạn
 input int                  InpRSIPeriod            = 14;                      // Chu kỳ RSI
@@ -81,8 +83,8 @@ input double               InpTPMultiplierATR      = 2.5;                     //
 input double               InpMaxCandleSpikeATR    = 2.0;                     // Chặn vào lệnh nếu nến tín hiệu dài quá (x ATR) [Baseline gốc]
 
 input group "=== 4. Thời gian, Lịch Tin tức & Bảo vệ Qua đêm ==="
-input int                  InpStartHourGMT         = 11;                      // Giờ bắt đầu mở lệnh (GMT) - 18:00 VN
-input int                  InpEndHourGMT           = 18;                      // Giờ ngừng mở lệnh mới (GMT) - 01:00 VN
+input int                  InpStartHourGMT         = 7;                       // Giờ bắt đầu mở lệnh (GMT) - 14:00 VN (Bao trọn Phiên London)
+input int                  InpEndHourGMT           = 19;                      // Giờ ngừng mở lệnh mới (GMT) - 02:00 VN (Hết Phiên New York)
 input int                  InpWinterGMTOffset      = 2;                       // GMT Offset mùa đông của Server (Dùng khi Backtest)
 input ENUM_DST_SCHEDULE    InpDSTSchedule          = DST_US;                  // Lịch đổi giờ mùa hè của Server (Dùng khi Backtest)
 input bool                 InpUseNewsFilter        = true;                    // Bật lọc tin tức USD High-Impact
@@ -663,6 +665,35 @@ bool GetPositionAccruedCosts(ulong positionTicket, double &outCommAndFee)
         }
      }
    outCommAndFee = total;
+   return true;
+  }
+
+//+------------------------------------------------------------------+
+//| Kiểm tra các vị thế hiện tại đã dời SL về Hòa Vốn (Free-Risk)    |
+//+------------------------------------------------------------------+
+bool IsExistingPositionRiskFree()
+  {
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol ||
+         (ulong)PositionGetInteger(POSITION_MAGIC) != InpMagicNumber)
+         continue;
+
+      ENUM_POSITION_TYPE pt = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+      double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+      double curSL     = PositionGetDouble(POSITION_SL);
+
+      if(pt == POSITION_TYPE_BUY)
+        {
+         if(curSL < openPrice) return false;
+        }
+      else if(pt == POSITION_TYPE_SELL)
+        {
+         if(curSL == 0.0 || curSL > openPrice) return false;
+        }
+     }
    return true;
   }
 
@@ -1266,22 +1297,36 @@ void UpdateChartHUD()
    string posDesc = "CHƯA CÓ LỆNH (Đang Quét Điểm Vào)";
    color  posClr  = clrSilver;
    int totalPos = PositionsTotal();
+   int managedCount = 0;
+   double totalManagedProfit = 0.0;
+   string lastPosSummary = "";
+
    for(int i = 0; i < totalPos; i++)
      {
       string posSym = PositionGetSymbol(i);
       if(posSym == _Symbol && PositionGetInteger(POSITION_MAGIC) == InpMagicNumber)
         {
+         managedCount++;
          ENUM_POSITION_TYPE pType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
          double pVol  = PositionGetDouble(POSITION_VOLUME);
          double pProf = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
          double pOpen = PositionGetDouble(POSITION_PRICE_OPEN);
-         posDesc = StringFormat("%s %.2f Lot @ %.2f | Lãi/Lỗ: %+.2f$",
-                                (pType == POSITION_TYPE_BUY ? "BUY 🟢" : "SELL 🔴"),
-                                pVol, pOpen, pProf);
-         posClr = (pProf >= 0.0) ? clrLime : clrTomato;
-         break;
+         totalManagedProfit += pProf;
+         lastPosSummary = StringFormat("%s %.2f Lot @ %.2f", (pType == POSITION_TYPE_BUY ? "BUY 🟢" : "SELL 🔴"), pVol, pOpen);
         }
      }
+
+   if(managedCount == 1)
+     {
+      posDesc = StringFormat("%s | Lãi/Lỗ: %+.2f$", lastPosSummary, totalManagedProfit);
+      posClr  = (totalManagedProfit >= 0.0) ? clrLime : clrTomato;
+     }
+   else if(managedCount > 1)
+     {
+      posDesc = StringFormat("%d Lệnh Chạy (Free-Risk) | Tổng PnL: %+.2f$", managedCount, totalManagedProfit);
+      posClr  = (totalManagedProfit >= 0.0) ? clrLime : clrTomato;
+     }
+
    SetHudLabel("XAU_HUD_L9", StringFormat("🎯 Vị Thế: %s", posDesc),
                panelX + 12, startY + lineH * 8, posClr, 9, true);
 
@@ -1499,10 +1544,19 @@ void OnTick()
    if(currentBarTime == g_lastBarTime)
       return;
 
-   if(openPosCount >= 1)
+   if(openPosCount >= InpMaxSimultaneousPos)
      {
       g_lastBarTime = currentBarTime;
       return;
+     }
+
+   if(openPosCount > 0 && InpAllowReentryOnBE)
+     {
+      if(!IsExistingPositionRiskFree())
+        {
+         g_lastBarTime = currentBarTime;
+         return; // Chỉ mở thêm lệnh mới khi các lệnh đang chạy đã dời SL về Hòa Vốn (Free-Risk)
+        }
      }
 
    // 6. KIỂM TRA KHUNG GIỜ GIAO DỊCH & TRIPLE SWAP ROLLOVER
