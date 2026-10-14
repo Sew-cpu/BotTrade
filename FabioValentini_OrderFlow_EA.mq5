@@ -43,10 +43,10 @@ input double               InpMinRangeWidthATR     = 0.4;                     //
 input int                  InpHTFTrendEMAPeriod    = 200;                     // EMA xu hướng khung lớn (Lọc thiên kiến chỉ đánh 1 chiều)
 input ENUM_TIMEFRAMES      InpHTFTimeframe         = PERIOD_CURRENT;          // Khung xu hướng lớn (PERIOD_CURRENT: Tự chọn M15 nếu chart M1, H1 nếu chart M5)
 
-input group "=== 3. Order Flow & Cumulative Volume Delta (CVD) ==="
-input int                  InpCVDLookbackTicks     = 1000;                    // Số tick phân tích Delta gần nhất
-input double               InpCVDThresholdRatio    = 1.5;                     // Tỷ lệ xung lực CVD Delta tối thiểu để xác nhận phá biên
-input bool                 InpUseVolumeAbsorption  = true;                    // Kiểm tra cạn kiệt thanh khoản gần 2 biên Range
+input group "=== 3. Lọc Tin Tức Đỏ USD & Đếm Ngược (Economic Calendar) ==="
+input bool                 InpUseNewsFilter        = true;                    // Bật lọc tin tức đỏ USD (High-Impact News)
+input int                  InpNewsPauseBeforeMin   = 30;                      // Số phút dừng mở lệnh trước tin đỏ
+input int                  InpNewsPauseAfterMin    = 30;                      // Số phút dừng mở lệnh sau tin đỏ
 
 input group "=== 4. Kích hoạt Lệnh & Chiến thuật Nhồi Vị thế (Pyramiding) ==="
 input ENUM_ENTRY_STYLE     InpEntryStyle           = ENTRY_BREAKOUT_DIRECT;   // Phong cách vào lệnh (Direct Breakout / Pullback Retest)
@@ -76,14 +76,14 @@ int            g_handleEMA20  = INVALID_HANDLE;
 int            g_handleATR    = INVALID_HANDLE;
 ENUM_TIMEFRAMES g_activeHTF   = PERIOD_H1;
 
-//--- Biến trạng thái Order Flow & Range
+//--- Biến trạng thái Range & Tin Tức
 datetime       g_lastBarTime          = 0;
 double         g_rangeHigh            = 0.0;
 double         g_rangeLow             = 0.0;
 bool           g_rangeValid           = false;
-double         g_currentCVD           = 0.0;
-double         g_cvdBuyVolume         = 0.0;
-double         g_cvdSellVolume        = 0.0;
+string         g_newsStatusText       = "Đang kiểm tra lịch tin...";
+color          g_newsStatusClr        = clrSilver;
+bool           g_isNewsPaused         = false;
 
 //--- Quản lý Tài khoản & Rủi ro Động
 double         g_dayStartBalance      = 0.0;
@@ -204,49 +204,132 @@ double CalculateDynamicRiskBudget()
   }
 
 //+------------------------------------------------------------------+
-//| Tính toán Cumulative Volume Delta (CVD) từ Tick Stream           |
+//| Lấy thông tin & đếm ngược thời gian tới tin tức đỏ USD gần nhất  |
 //+------------------------------------------------------------------+
-void CalculateTickOrderFlow(double &outDelta, double &outBuyVol, double &outSellVol)
+bool GetUSDHighImpactNewsStatus(string &outStatusDesc, color &outStatusClr, bool &outIsPaused)
   {
-   outDelta   = 0.0;
-   outBuyVol  = 0.0;
-   outSellVol = 0.0;
-
-   MqlTick ticks[];
-   int copied = CopyTicks(_Symbol, ticks, COPY_TICKS_ALL, 0, InpCVDLookbackTicks);
-   if(copied <= 1) return;
-
-   for(int i = 1; i < copied; i++)
+   outIsPaused = false;
+   if(!InpUseNewsFilter)
      {
-      double vol = (ticks[i].volume_real > 0) ? (double)ticks[i].volume_real : (double)ticks[i].volume;
-      if(vol <= 0.0) vol = 1.0;
+      outStatusDesc = "Đã Tắt Lọc Tin Đỏ";
+      outStatusClr  = clrSilver;
+      return false;
+     }
 
-      // Nhận diện Aggressor Side theo cơ chế chuẩn Order Flow
-      if((ticks[i].flags & TICK_FLAG_BUY) != 0 || ticks[i].last >= ticks[i].ask)
+   datetime serverNow = TimeTradeServer();
+   if(serverNow <= 0) serverNow = TimeCurrent();
+
+   // Khi Backtest: dùng bảng giờ định sẵn của các tin đỏ chính (NFP/CPI/FOMC)
+   if(MQLInfoInteger(MQL_TESTER))
+     {
+      MqlDateTime gmt;
+      TimeToStruct(GetGMTTime(), gmt);
+      int minOfDay = gmt.hour * 60 + gmt.min;
+
+      // NFP: Thứ 6 đầu tháng (12:30 - 14:00 GMT)
+      if(gmt.day_of_week == 5 && gmt.day <= 7 && minOfDay >= (12 * 60 + 30) && minOfDay <= (14 * 60))
         {
-         outBuyVol += vol;
-         outDelta  += vol;
+         outStatusDesc = "🔴 DỪNG MỞ LỆNH: TIN ĐỎ NFP";
+         outStatusClr  = clrRed;
+         outIsPaused   = true;
+         return true;
         }
-      else if((ticks[i].flags & TICK_FLAG_SELL) != 0 || ticks[i].last <= ticks[i].bid)
+      outStatusDesc = "🟢 AN TOÀN (Lịch Tin USD Bình Thường)";
+      outStatusClr  = clrSpringGreen;
+      return false;
+     }
+
+   // Khi Live / Demo: Đọc trực tiếp Economic Calendar của MT5
+   datetime fromTime = serverNow - (InpNewsPauseAfterMin * 60);
+   datetime toTime   = serverNow + (24 * 3600); // 24 giờ tới
+
+   MqlCalendarValue values[];
+   ResetLastError();
+   if(CalendarValueHistory(values, fromTime, toTime, NULL, "USD") <= 0)
+     {
+      outStatusDesc = "🟢 AN TOÀN (Không vướng tin đỏ USD trong 24h)";
+      outStatusClr  = clrSpringGreen;
+      return false;
+     }
+
+   int total = ArraySize(values);
+   datetime closestPastNews = 0;
+   datetime closestFutureNews = 0;
+   string   closestPastName = "";
+   string   closestFutureName = "";
+
+   for(int i = 0; i < total; i++)
+     {
+      MqlCalendarEvent event;
+      if(CalendarEventById(values[i].event_id, event))
         {
-         outSellVol += vol;
-         outDelta   -= vol;
-        }
-      else
-        {
-         // Dựa trên bước nhảy giá (Tick rule)
-         if(ticks[i].last > ticks[i-1].last)
+         if(event.importance == CALENDAR_IMPORTANCE_HIGH)
            {
-            outBuyVol += vol;
-            outDelta  += vol;
-           }
-         else if(ticks[i].last < ticks[i-1].last)
-           {
-            outSellVol += vol;
-            outDelta   -= vol;
+            datetime eventTime = values[i].time;
+            if(eventTime <= serverNow)
+              {
+               if(eventTime > closestPastNews)
+                 {
+                  closestPastNews = eventTime;
+                  closestPastName = event.name;
+                 }
+              }
+            else
+              {
+               if(closestFutureNews == 0 || eventTime < closestFutureNews)
+                 {
+                  closestFutureNews = eventTime;
+                  closestFutureName = event.name;
+                 }
+              }
            }
         }
      }
+
+   // 1. Kiểm tra nếu vừa ra tin đỏ (đang trong thời gian nghỉ sau tin)
+   if(closestPastNews > 0 && (serverNow - closestPastNews) <= (InpNewsPauseAfterMin * 60))
+     {
+      int passedMin = (int)((serverNow - closestPastNews) / 60);
+      int remainPause = InpNewsPauseAfterMin - passedMin;
+      outStatusDesc = StringFormat("🔴 VỪA RA TIN ĐỎ [%s] (Dừng thêm %dp)", closestPastName, remainPause);
+      outStatusClr  = clrRed;
+      outIsPaused   = true;
+      return true;
+     }
+
+   // 2. Kiểm tra nếu sắp có tin đỏ trong tương lai
+   if(closestFutureNews > 0)
+     {
+      int secondsToNews = (int)(closestFutureNews - serverNow);
+      int minutesToNews = secondsToNews / 60;
+
+      // Đang trong thời gian tạm dừng trước tin
+      if(minutesToNews <= InpNewsPauseBeforeMin)
+        {
+         outStatusDesc = StringFormat("🔴 DỪNG MỞ LỆNH: TIN ĐỎ SAU %dp [%s]", minutesToNews, closestFutureName);
+         outStatusClr  = clrOrangeRed;
+         outIsPaused   = true;
+         return true;
+        }
+      else if(minutesToNews <= 120) // Cảnh báo trước 2 tiếng
+        {
+         outStatusDesc = StringFormat("⚠️ CẢNH BÁO: Còn %d phút có Tin Đỏ [%s]", minutesToNews, closestFutureName);
+         outStatusClr  = clrOrange;
+         return false;
+        }
+      else
+        {
+         int hours = minutesToNews / 60;
+         int mins  = minutesToNews % 60;
+         outStatusDesc = StringFormat("🟢 AN TOÀN (Tin Đỏ sau %dh%02dm - %s)", hours, mins, closestFutureName);
+         outStatusClr  = clrLimeGreen;
+         return false;
+        }
+     }
+
+   outStatusDesc = "🟢 AN TOÀN (Không có tin đỏ USD trong 24h)";
+   outStatusClr  = clrSpringGreen;
+   return false;
   }
 
 //+------------------------------------------------------------------+
@@ -452,7 +535,7 @@ void UpdateChartHUD()
 
    SetHudPanel("VALENTINI_HUD_BG", panelX, panelY, panelW, panelH, C'12,18,26', C'40,85,130');
    SetHudPanel("VALENTINI_HUD_HEAD", panelX, panelY, panelW, 28, C'20,40,65', clrDodgerBlue);
-   SetHudLabel("VALENTINI_HUD_TITLE", "⚡ FABIO VALENTINI ORDER FLOW & PYRAMID", panelX + 12, panelY + 6, clrGold, 10, true);
+   SetHudLabel("VALENTINI_HUD_TITLE", "⚡ FABIO VALENTINI SCALPING & PYRAMID", panelX + 12, panelY + 6, clrGold, 10, true);
 
    int startY = panelY + 35;
    int lineH  = 22;
@@ -518,11 +601,9 @@ void UpdateChartHUD()
    SetHudLabel("VALENTINI_HUD_L5", StringFormat("📦 Vùng Tích Lũy (Range): %s", rangeDesc),
                panelX + 12, startY + lineH * 4, g_rangeValid ? clrYellow : clrDarkGray, 9);
 
-   // Dòng 6: Cumulative Volume Delta (CVD)
-   color cvdClr = (g_currentCVD > 0) ? clrLime : ((g_currentCVD < 0) ? clrTomato : clrSilver);
-   SetHudLabel("VALENTINI_HUD_L6", StringFormat("🌊 CVD Order Flow: %+.0f (Buy: %.0f | Sell: %.0f)",
-                                               g_currentCVD, g_cvdBuyVolume, g_cvdSellVolume),
-               panelX + 12, startY + lineH * 5, cvdClr, 9, true);
+   // Dòng 6: Cảnh Báo Lịch Tin Đỏ USD
+   SetHudLabel("VALENTINI_HUD_L6", StringFormat("📰 Lịch Tin USD: %s", g_newsStatusText),
+               panelX + 12, startY + lineH * 5, g_newsStatusClr, 8, true);
 
    // Dòng 7: Xu Hướng HTF
    double htfEMA[1];
@@ -665,8 +746,8 @@ void OnTick()
       return;
    double currentATR = atrBuf[0];
 
-   // 3. Phân tích Order Flow & CVD Tức thời
-   CalculateTickOrderFlow(g_currentCVD, g_cvdBuyVolume, g_cvdSellVolume);
+   // 3. Cập nhật Lịch Tin Tức Đỏ USD & Đếm Ngược
+   GetUSDHighImpactNewsStatus(g_newsStatusText, g_newsStatusClr, g_isNewsPaused);
 
    // 4. Quét Vùng Tích Lũy (Range Consolidation)
    g_rangeValid = DetectConsolidationRange(g_rangeHigh, g_rangeLow, currentATR);
@@ -772,7 +853,7 @@ void OnTick()
             if(openDirection == 1) // Đang có lệnh BUY
               {
                // Nhồi khi giá tiếp tục bứt phá đỉnh mới cao hơn lệnh trước ít nhất 1.0 ATR
-               if(bid >= lastEntryPrice + InpPyramidStepATR * currentATR && g_currentCVD > 0)
+               if(bid >= lastEntryPrice + InpPyramidStepATR * currentATR)
                  {
                   double sl = NormalizeDouble(bid - InpTrailingATR * currentATR, _Digits);
                   double lot = CalculatePyramidLot(addRiskMoney, bid, sl);
@@ -789,7 +870,7 @@ void OnTick()
             else if(openDirection == -1) // Đang có lệnh SELL
               {
                // Nhồi khi giá tiếp tục phá đáy mới thấp hơn lệnh trước ít nhất 1.0 ATR
-               if(ask <= lastEntryPrice - InpPyramidStepATR * currentATR && g_currentCVD < 0)
+               if(ask <= lastEntryPrice - InpPyramidStepATR * currentATR)
                  {
                   double sl = NormalizeDouble(ask + InpTrailingATR * currentATR, _Digits);
                   double lot = CalculatePyramidLot(addRiskMoney, ask, sl);
@@ -818,6 +899,8 @@ void OnTick()
          return;
      }
 
+   if(g_isNewsPaused) return; // Dừng mở lệnh gốc khi vướng tin đỏ USD
+
    if(!g_rangeValid) return;
 
    // Kiểm tra Thiên kiến Xu hướng Khung Lớn (HTF Trend Filter)
@@ -838,9 +921,9 @@ void OnTick()
 
    if(InpEntryStyle == ENTRY_BREAKOUT_DIRECT)
      {
-      // Breakout trực tiếp khi giá phá biên Range kèm xác nhận CVD Delta
-      buyBreakout  = (close1 > g_rangeHigh) && (close1 > htfEMAPrice) && (g_currentCVD > InpCVDThresholdRatio * 10.0);
-      sellBreakout = (close1 < g_rangeLow)  && (close1 < htfEMAPrice) && (g_currentCVD < -InpCVDThresholdRatio * 10.0);
+      // Breakout trực tiếp khi giá phá biên Range
+      buyBreakout  = (close1 > g_rangeHigh) && (close1 > htfEMAPrice);
+      sellBreakout = (close1 < g_rangeLow)  && (close1 < htfEMAPrice);
      }
    else // ENTRY_PULLBACK_RETEST (Phong cách Nhật Hoài)
      {
@@ -848,8 +931,8 @@ void OnTick()
       bool buyRetest  = (prevC1 > g_rangeHigh) && (rates[1].low <= g_rangeHigh + 0.3 * currentATR) && (close1 > g_rangeHigh);
       bool sellRetest = (prevC1 < g_rangeLow)  && (rates[1].high >= g_rangeLow - 0.3 * currentATR) && (close1 < g_rangeLow);
 
-      buyBreakout  = buyRetest  && (close1 > htfEMAPrice) && (g_currentCVD > 0);
-      sellBreakout = sellRetest && (close1 < htfEMAPrice) && (g_currentCVD < 0);
+      buyBreakout  = buyRetest  && (close1 > htfEMAPrice);
+      sellBreakout = sellRetest && (close1 < htfEMAPrice);
      }
 
    if(!buyBreakout && !sellBreakout) return;
@@ -871,7 +954,7 @@ void OnTick()
            {
             g_activePyramidStage = PYRAMID_BASE;
             g_tradeDirection     = 1;
-            PrintFormat("BASE BUY ORDER EXECUTED: Lot %.2f @ %.2f | SL: %.2f | CVD: %.0f", lot, ask, sl, g_currentCVD);
+            PrintFormat("BASE BUY ORDER EXECUTED: Lot %.2f @ %.2f | SL: %.2f", lot, ask, sl);
            }
         }
      }
@@ -888,7 +971,7 @@ void OnTick()
            {
             g_activePyramidStage = PYRAMID_BASE;
             g_tradeDirection     = -1;
-            PrintFormat("BASE SELL ORDER EXECUTED: Lot %.2f @ %.2f | SL: %.2f | CVD: %.0f", lot, bid, sl, g_currentCVD);
+            PrintFormat("BASE SELL ORDER EXECUTED: Lot %.2f @ %.2f | SL: %.2f", lot, bid, sl);
            }
         }
      }
