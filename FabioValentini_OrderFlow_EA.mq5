@@ -37,9 +37,9 @@ input double               InpFixedLotIfNoDynamic  = 0.01;                    //
 input bool                 InpUseDynamicSizing     = true;                    // Bật tính Lot động theo Risk Budget
 
 input group "=== 2. Nhận diện Vùng Tích lũy (Market Range Detection) ==="
-input int                  InpRangeLookbackBars    = 25;                      // Số nến dò biên tích lũy (Range Lookback)
-input double               InpMaxRangeWidthATR     = 2.8;                     // Biên độ hộp tối đa (x ATR) - Chặn hộp quá rộng
-input double               InpMinRangeWidthATR     = 0.8;                     // Biên độ hộp tối thiểu (x ATR) - Chặn hộp quá hẹp
+input int                  InpRangeLookbackBars    = 15;                      // Số nến dò biên tích lũy (15 nến trên M1/M5)
+input double               InpMaxRangeWidthATR     = 4.5;                     // Biên độ hộp tối đa (x ATR) - Chặn hộp quá rộng
+input double               InpMinRangeWidthATR     = 0.4;                     // Biên độ hộp tối thiểu (x ATR) - Chặn hộp quá hẹp
 input int                  InpHTFTrendEMAPeriod    = 200;                     // EMA xu hướng khung lớn (Lọc thiên kiến chỉ đánh 1 chiều)
 input ENUM_TIMEFRAMES      InpHTFTimeframe         = PERIOD_CURRENT;          // Khung xu hướng lớn (PERIOD_CURRENT: Tự chọn M15 nếu chart M1, H1 nếu chart M5)
 
@@ -63,8 +63,8 @@ input double               InpTrailingATR          = 1.2;                     //
 input double               InpMinProfitBEATR       = 1.0;                     // Dời BE khi giá chạy được (x ATR)
 
 input group "=== 6. Thời gian & Thông số Kỹ thuật ==="
-input int                  InpStartHourGMT         = 7;                       // Giờ bắt đầu tìm cơ hội (GMT) - 14:00 VN
-input int                  InpEndHourGMT           = 19;                      // Giờ dừng tìm cơ hội mới (GMT) - 02:00 VN
+input int                  InpStartHourGMT         = 0;                       // Giờ bắt đầu tìm cơ hội (GMT) - 00:00 (24/24 Xuyên suốt)
+input int                  InpEndHourGMT           = 24;                      // Giờ dừng tìm cơ hội mới (GMT) - 24:00 (24/24 Xuyên suốt)
 input ulong                InpMagicNumber          = 20261020;                // Magic Number định danh Bot
 input ulong                InpSlippagePts          = 30;                      // Slippage cho phép (Points)
 input bool                 InpShowHUD              = true;                    // Hiển thị bảng HUD Dashboard Order Flow
@@ -518,10 +518,11 @@ void UpdateChartHUD()
    MqlDateTime gmt;
    TimeToStruct(GetGMTTime(), gmt);
    int vnHour = (gmt.hour + 7) % 24;
-   bool inSession = (gmt.hour >= InpStartHourGMT && gmt.hour < InpEndHourGMT);
-   SetHudLabel("VALENTINI_HUD_L9", StringFormat("⏱️ Phiên Trade: %02d:00-%02d:00 GMT [%02dh-%02dh VN] (%s)",
-                                               InpStartHourGMT, InpEndHourGMT, (InpStartHourGMT+7)%24, (InpEndHourGMT+7)%24,
-                                               inSession ? "ĐANG TRONG PHIÊN" : "NGOÀI GIỜ"),
+   bool is24h = (InpStartHourGMT == 0 && InpEndHourGMT >= 24);
+   bool inSession = is24h || (gmt.hour >= InpStartHourGMT && gmt.hour < InpEndHourGMT);
+   string sessionDesc = is24h ? "24/24 (XUYÊN SUỐT TOÀN THỜI GIAN)" : StringFormat("%02d:00-%02d:00 GMT [%02dh-%02dh VN]", InpStartHourGMT, InpEndHourGMT, (InpStartHourGMT+7)%24, (InpEndHourGMT+7)%24);
+   SetHudLabel("VALENTINI_HUD_L9", StringFormat("⏱️ Phiên Trade: %s (%s)",
+                                               sessionDesc, inSession ? "ĐANG HOẠT ĐỘNG 🟢" : "NGOÀI GIỜ 🟡"),
                panelX + 12, startY + lineH * 8, inSession ? clrSpringGreen : clrGray, 8);
 
    // Dòng 10: Chế độ Thực thi
@@ -745,8 +746,12 @@ void OnTick()
    // 7. KIỂM TRA ĐIỀU KIỆN MỞ LỆNH GỐC (BASE POSITION - 50% RISK)
    MqlDateTime gmt;
    TimeToStruct(GetGMTTime(), gmt);
-   if(gmt.hour < InpStartHourGMT || gmt.hour >= InpEndHourGMT)
-      return;
+   bool is24h = (InpStartHourGMT == 0 && InpEndHourGMT >= 24);
+   if(!is24h)
+     {
+      if(gmt.hour < InpStartHourGMT || gmt.hour >= InpEndHourGMT)
+         return;
+     }
 
    if(!g_rangeValid) return;
 
