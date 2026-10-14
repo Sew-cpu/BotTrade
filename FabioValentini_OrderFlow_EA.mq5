@@ -37,11 +37,11 @@ input double               InpFixedLotIfNoDynamic  = 0.01;                    //
 input bool                 InpUseDynamicSizing     = true;                    // Bật tính Lot động theo Risk Budget
 
 input group "=== 2. Nhận diện Vùng Tích lũy (Market Range Detection) ==="
-input int                  InpRangeLookbackBars    = 25;                      // Số nến M15 dò biên tích lũy (Range Lookback)
+input int                  InpRangeLookbackBars    = 25;                      // Số nến dò biên tích lũy (Range Lookback)
 input double               InpMaxRangeWidthATR     = 2.8;                     // Biên độ hộp tối đa (x ATR) - Chặn hộp quá rộng
 input double               InpMinRangeWidthATR     = 0.8;                     // Biên độ hộp tối thiểu (x ATR) - Chặn hộp quá hẹp
 input int                  InpHTFTrendEMAPeriod    = 200;                     // EMA xu hướng khung lớn (Lọc thiên kiến chỉ đánh 1 chiều)
-input ENUM_TIMEFRAMES      InpHTFTimeframe         = PERIOD_H1;               // Khung thời gian xác định xu hướng lớn
+input ENUM_TIMEFRAMES      InpHTFTimeframe         = PERIOD_CURRENT;          // Khung xu hướng lớn (PERIOD_CURRENT: Tự chọn M15 nếu chart M1, H1 nếu chart M5)
 
 input group "=== 3. Order Flow & Cumulative Volume Delta (CVD) ==="
 input int                  InpCVDLookbackTicks     = 1000;                    // Số tick phân tích Delta gần nhất
@@ -74,6 +74,7 @@ CTrade         g_trade;
 int            g_handleHTFEMA = INVALID_HANDLE;
 int            g_handleEMA20  = INVALID_HANDLE;
 int            g_handleATR    = INVALID_HANDLE;
+ENUM_TIMEFRAMES g_activeHTF   = PERIOD_H1;
 
 //--- Biến trạng thái Order Flow & Range
 datetime       g_lastBarTime          = 0;
@@ -231,7 +232,7 @@ bool DetectConsolidationRange(double &rangeHigh, double &rangeLow, double curren
    if(currentATR <= 0.0) return false;
 
    MqlRates rates[];
-   if(CopyRates(_Symbol, PERIOD_M15, 1, InpRangeLookbackBars, rates) < InpRangeLookbackBars)
+   if(CopyRates(_Symbol, _Period, 1, InpRangeLookbackBars, rates) < InpRangeLookbackBars)
       return false;
 
    double highest = rates[0].high;
@@ -462,8 +463,8 @@ void UpdateChartHUD()
    color  trendClr = clrSilver;
    if(CopyBuffer(g_handleHTFEMA, 0, 1, 1, htfEMA) == 1)
      {
-      double closeM15 = iClose(_Symbol, PERIOD_M15, 1);
-      if(closeM15 > htfEMA[0])
+      double closePrice = iClose(_Symbol, _Period, 1);
+      if(closePrice > htfEMA[0])
         {
          trendStr = "BULLISH 🟢 (Chỉ Canh Buy)";
          trendClr = clrLime;
@@ -474,7 +475,8 @@ void UpdateChartHUD()
          trendClr = clrTomato;
         }
      }
-   SetHudLabel("VALENTINI_HUD_L5", StringFormat("🧭 Thiên Kiến Lớn (H1 EMA200): %s", trendStr),
+   string htfName = StringSubstr(EnumToString(g_activeHTF), 7);
+   SetHudLabel("VALENTINI_HUD_L5", StringFormat("🧭 Thiên Kiến Lớn (%s EMA%d): %s", htfName, InpHTFTrendEMAPeriod, trendStr),
                panelX + 12, startY + lineH * 4, trendClr, 9);
 
    // Dòng 6: Trạng thái Pyramiding (Nhồi Lệnh)
@@ -539,9 +541,20 @@ int OnInit()
    g_trade.SetDeviationInPoints(InpSlippagePts);
    g_trade.SetTypeFillingBySymbol(_Symbol);
 
-   g_handleHTFEMA = iMA(_Symbol, InpHTFTimeframe, InpHTFTrendEMAPeriod, 0, MODE_EMA, PRICE_CLOSE);
-   g_handleEMA20  = iMA(_Symbol, PERIOD_M15, InpExitEMAPeriod, 0, MODE_EMA, PRICE_CLOSE);
-   g_handleATR    = iATR(_Symbol, PERIOD_M15, 14);
+   // Tự động chọn khung xu hướng lớn thông minh
+   g_activeHTF = InpHTFTimeframe;
+   if(g_activeHTF == PERIOD_CURRENT)
+     {
+      if(_Period == PERIOD_M1)       g_activeHTF = PERIOD_M15;
+      else if(_Period == PERIOD_M5)  g_activeHTF = PERIOD_H1;
+      else if(_Period == PERIOD_M15) g_activeHTF = PERIOD_H1;
+      else if(_Period == PERIOD_M30) g_activeHTF = PERIOD_H4;
+      else                           g_activeHTF = PERIOD_D1;
+     }
+
+   g_handleHTFEMA = iMA(_Symbol, g_activeHTF, InpHTFTrendEMAPeriod, 0, MODE_EMA, PRICE_CLOSE);
+   g_handleEMA20  = iMA(_Symbol, _Period, InpExitEMAPeriod, 0, MODE_EMA, PRICE_CLOSE);
+   g_handleATR    = iATR(_Symbol, _Period, 14);
 
    if(g_handleHTFEMA == INVALID_HANDLE || g_handleEMA20 == INVALID_HANDLE || g_handleATR == INVALID_HANDLE)
      {
@@ -553,7 +566,8 @@ int OnInit()
    g_highWaterMark   = AccountInfoDouble(ACCOUNT_EQUITY);
    UpdateDailyAccounting();
 
-   Print("FABIO VALENTINI ORDER FLOW SCALPING EA Initialized Successfully.");
+   PrintFormat("FABIO VALENTINI ORDER FLOW SCALPING EA Initialized on %s (HTF: %s).",
+               EnumToString(_Period), EnumToString(g_activeHTF));
    return INIT_SUCCEEDED;
   }
 
@@ -600,21 +614,22 @@ void OnTick()
       double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
       double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
 
-      // Thoát lệnh khi nến M15 đóng ngược qua EMA 20 (Đặc trưng Fabio Valentini)
+      // Thoát lệnh khi nến đóng ngược qua EMA 20 (Đặc trưng Fabio Valentini)
       if(InpExitOnEMACross)
         {
          double ema20[2];
          MqlRates lastRates[2];
-         if(CopyBuffer(g_handleEMA20, 0, 1, 2, ema20) == 2 && CopyRates(_Symbol, PERIOD_M15, 1, 2, lastRates) == 2)
+         if(CopyBuffer(g_handleEMA20, 0, 1, 2, ema20) == 2 && CopyRates(_Symbol, _Period, 1, 2, lastRates) == 2)
            {
+            string tfName = StringSubstr(EnumToString(_Period), 7);
             if(openDirection == 1 && lastRates[1].close < ema20[1]) // BUY mà đóng dưới EMA 20
               {
-               CloseAllPositions("Nến M15 Đóng Dưới EMA 20 (Sóng Tăng Kết Thúc)");
+               CloseAllPositions(StringFormat("Nến %s Đóng Dưới EMA 20 (Sóng Tăng Kết Thúc)", tfName));
                return;
               }
             else if(openDirection == -1 && lastRates[1].close > ema20[1]) // SELL mà đóng trên EMA 20
               {
-               CloseAllPositions("Nến M15 Đóng Trên EMA 20 (Sóng Giảm Kết Thúc)");
+               CloseAllPositions(StringFormat("Nến %s Đóng Trên EMA 20 (Sóng Giảm Kết Thúc)", tfName));
                return;
               }
            }
@@ -667,7 +682,7 @@ void OnTick()
       if(InpEnablePyramiding && openCount < InpMaxPyramidStages)
         {
          // Kiểm tra nếu nến mới xuất hiện
-         datetime barTime = iTime(_Symbol, PERIOD_M15, 0);
+         datetime barTime = iTime(_Symbol, _Period, 0);
          if(barTime != g_lastBarTime)
            {
             g_lastBarTime = barTime;
@@ -741,7 +756,7 @@ void OnTick()
    double htfEMAPrice = htfEMA[0];
 
    MqlRates rates[2];
-   if(CopyRates(_Symbol, PERIOD_M15, 1, 2, rates) < 2) return;
+   if(CopyRates(_Symbol, _Period, 1, 2, rates) < 2) return;
    double close1 = rates[1].close;
    double prevC1 = rates[0].close;
 
