@@ -91,6 +91,10 @@ int            g_currentGMTDay        = -1;
 double         g_dailyRealizedProfit  = 0.0;
 double         g_highWaterMark        = 0.0;
 bool           g_isLockedForDay       = false;
+int            g_dailyWinCount        = 0;
+int            g_dailyLossCount       = 0;
+double         g_dailyWinMoney        = 0.0;
+double         g_dailyLossMoney       = 0.0;
 datetime       g_lastGuiUpdate        = 0;
 int            g_activePyramidStage   = PYRAMID_NONE;
 int            g_tradeDirection       = 0; // 1 = BUY, -1 = SELL
@@ -130,6 +134,8 @@ void UpdateDailyAccounting()
    HistorySelect(dayStart, TimeCurrent());
    int totalDeals = HistoryDealsTotal();
    double realizedToday = 0.0;
+   int winC = 0, lossC = 0;
+   double winM = 0.0, lossM = 0.0;
 
    for(int i = 0; i < totalDeals; i++)
      {
@@ -137,12 +143,31 @@ void UpdateDailyAccounting()
       if(ticket > 0 && HistoryDealGetString(ticket, DEAL_SYMBOL) == _Symbol &&
          HistoryDealGetInteger(ticket, DEAL_MAGIC) == InpMagicNumber)
         {
-         realizedToday += HistoryDealGetDouble(ticket, DEAL_PROFIT)
-                        + HistoryDealGetDouble(ticket, DEAL_SWAP)
-                        + HistoryDealGetDouble(ticket, DEAL_COMMISSION);
+         ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(ticket, DEAL_ENTRY);
+         if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT || entry == DEAL_ENTRY_OUT_BY)
+           {
+            double p = HistoryDealGetDouble(ticket, DEAL_PROFIT)
+                     + HistoryDealGetDouble(ticket, DEAL_SWAP)
+                     + HistoryDealGetDouble(ticket, DEAL_COMMISSION);
+            realizedToday += p;
+            if(p > 0.0)
+              {
+               winC++;
+               winM += p;
+              }
+            else if(p < 0.0)
+              {
+               lossC++;
+               lossM += p;
+              }
+           }
         }
      }
    g_dailyRealizedProfit = realizedToday;
+   g_dailyWinCount       = winC;
+   g_dailyLossCount      = lossC;
+   g_dailyWinMoney       = winM;
+   g_dailyLossMoney      = lossM;
 
    // Kiểm tra ngắt mạch ngày
    double maxDailyLoss = (g_dayStartBalance > 0.0) ? (g_dayStartBalance * InpMaxDailyLossPercent / 100.0) : 20.0;
@@ -422,8 +447,8 @@ void UpdateChartHUD()
 
    int panelX = 15;
    int panelY = 25;
-   int panelW = 430;
-   int panelH = 340;
+   int panelW = 445;
+   int panelH = 385;
 
    SetHudPanel("VALENTINI_HUD_BG", panelX, panelY, panelW, panelH, C'12,18,26', C'40,85,130');
    SetHudPanel("VALENTINI_HUD_HEAD", panelX, panelY, panelW, 28, C'20,40,65', clrDodgerBlue);
@@ -435,29 +460,71 @@ void UpdateChartHUD()
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
    double riskBudget = CalculateDynamicRiskBudget();
 
+   // Đếm số lệnh đang mở và PnL nổi
+   int openCount = 0, dir = 0;
+   double openVolume = 0.0;
+   double openProfit = 0.0;
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol &&
+         PositionGetInteger(POSITION_MAGIC) == InpMagicNumber)
+        {
+         openCount++;
+         double vol = PositionGetDouble(POSITION_VOLUME);
+         double p   = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+         ENUM_POSITION_TYPE pt = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+         dir = (pt == POSITION_TYPE_BUY) ? 1 : -1;
+         openVolume += vol;
+         openProfit += p;
+        }
+     }
+
+   string openDesc = "CHƯA CÓ LỆNH (Đang Quét Tín Hiệu)";
+   color  openClr  = clrSilver;
+   if(openCount > 0)
+     {
+      openDesc = StringFormat("%d Lệnh %s (%.2f Lot) | PnL Nổi: %+.2f$",
+                              openCount, (dir == 1 ? "BUY 🟢" : "SELL 🔴"), openVolume, openProfit);
+      openClr  = (openProfit >= 0.0) ? clrLime : clrTomato;
+     }
+
    // Dòng 1: Tài chính & Ngân sách rủi ro động
    SetHudLabel("VALENTINI_HUD_L1", StringFormat("💰 Vốn: $%.2f | Ngân Sách Risk Động: $%.2f (%.2f%%)",
                                                equity, riskBudget, (riskBudget / equity * 100.0)),
                panelX + 12, startY, clrAqua, 9, true);
 
-   // Dòng 2: Lãi ngày & Compounding
+   // Dòng 2: Lệnh đang chạy thời gian thực
+   SetHudLabel("VALENTINI_HUD_L2", StringFormat("🎯 Lệnh Đang Chạy: %s", openDesc),
+               panelX + 12, startY + lineH, openClr, 9, true);
+
+   // Dòng 3: Thống kê Lệnh Thắng / Lệnh Thua hôm nay
+   int totalClosedTrades = g_dailyWinCount + g_dailyLossCount;
+   double winRate = (totalClosedTrades > 0) ? ((double)g_dailyWinCount / totalClosedTrades * 100.0) : 0.0;
+   color statClr = (g_dailyWinCount >= g_dailyLossCount) ? clrLimeGreen : clrOrange;
+   SetHudLabel("VALENTINI_HUD_L3", StringFormat("📊 Hôm Nay: Thắng %d (+%.2f$) | Thua %d (-%.2f$) | Win Rate: %.0f%%",
+                                               g_dailyWinCount, g_dailyWinMoney, g_dailyLossCount, MathAbs(g_dailyLossMoney), winRate),
+               panelX + 12, startY + lineH * 2, statClr, 9);
+
+   // Dòng 4: Lãi ngày đã chốt & Compounding
    color pnlClr = (g_dailyRealizedProfit >= 0.0) ? clrLime : clrTomato;
-   SetHudLabel("VALENTINI_HUD_L2", StringFormat("📈 Lãi Đã Chốt Ngày: %+.2f$ | Tái Đầu Tư Risk: %.0f%%",
+   SetHudLabel("VALENTINI_HUD_L4", StringFormat("📈 Lãi Ròng Đã Chốt: %+.2f$ | Tái Đầu Tư Risk: %.0f%%",
                                                g_dailyRealizedProfit, InpProfitReinvestPct),
-               panelX + 12, startY + lineH, pnlClr, 9);
+               panelX + 12, startY + lineH * 3, pnlClr, 9);
 
-   // Dòng 3: Cấu trúc Range
+   // Dòng 5: Cấu trúc Range
    string rangeDesc = g_rangeValid ? StringFormat("Hộp [%.2f - %.2f] | Biên: $%.2f", g_rangeLow, g_rangeHigh, g_rangeHigh - g_rangeLow) : "Đang Tìm Vùng Nén...";
-   SetHudLabel("VALENTINI_HUD_L3", StringFormat("📦 Vùng Tích Lũy (Range): %s", rangeDesc),
-               panelX + 12, startY + lineH * 2, g_rangeValid ? clrYellow : clrDarkGray, 9);
+   SetHudLabel("VALENTINI_HUD_L5", StringFormat("📦 Vùng Tích Lũy (Range): %s", rangeDesc),
+               panelX + 12, startY + lineH * 4, g_rangeValid ? clrYellow : clrDarkGray, 9);
 
-   // Dòng 4: Cumulative Volume Delta (CVD)
+   // Dòng 6: Cumulative Volume Delta (CVD)
    color cvdClr = (g_currentCVD > 0) ? clrLime : ((g_currentCVD < 0) ? clrTomato : clrSilver);
-   SetHudLabel("VALENTINI_HUD_L4", StringFormat("🌊 CVD Order Flow: %+.0f (Buy: %.0f | Sell: %.0f)",
+   SetHudLabel("VALENTINI_HUD_L6", StringFormat("🌊 CVD Order Flow: %+.0f (Buy: %.0f | Sell: %.0f)",
                                                g_currentCVD, g_cvdBuyVolume, g_cvdSellVolume),
-               panelX + 12, startY + lineH * 3, cvdClr, 9, true);
+               panelX + 12, startY + lineH * 5, cvdClr, 9, true);
 
-   // Dòng 5: Xu Hướng HTF (H1 EMA 200)
+   // Dòng 7: Xu Hướng HTF
    double htfEMA[1];
    string trendStr = "CHỜ TÍN HIỆU";
    color  trendClr = clrSilver;
@@ -476,12 +543,10 @@ void UpdateChartHUD()
         }
      }
    string htfName = StringSubstr(EnumToString(g_activeHTF), 7);
-   SetHudLabel("VALENTINI_HUD_L5", StringFormat("🧭 Thiên Kiến Lớn (%s EMA%d): %s", htfName, InpHTFTrendEMAPeriod, trendStr),
-               panelX + 12, startY + lineH * 4, trendClr, 9);
+   SetHudLabel("VALENTINI_HUD_L7", StringFormat("🧭 Thiên Kiến Lớn (%s EMA%d): %s", htfName, InpHTFTrendEMAPeriod, trendStr),
+               panelX + 12, startY + lineH * 6, trendClr, 9);
 
-   // Dòng 6: Trạng thái Pyramiding (Nhồi Lệnh)
-   int openCount = 0, dir = 0;
-   openCount = CountManagedPositions(dir);
+   // Dòng 8: Trạng thái Pyramiding (Nhồi Lệnh)
    string pyrStr = "CHƯA CÓ LỆNH (Sẵn sàng Base 50%)";
    color  pyrClr = clrSilver;
    if(openCount == 1)
@@ -499,36 +564,36 @@ void UpdateChartHUD()
       pyrStr = "LỆNH 3 (Max Pyramiding 100%) 🏆 FULL ATTACK";
       pyrClr = clrGold;
      }
-   SetHudLabel("VALENTINI_HUD_L6", StringFormat("🪜 Tầng Pyramiding: %s", pyrStr),
-               panelX + 12, startY + lineH * 5, pyrClr, 9, true);
+   SetHudLabel("VALENTINI_HUD_L8", StringFormat("🪜 Tầng Pyramiding: %s", pyrStr),
+               panelX + 12, startY + lineH * 7, pyrClr, 9, true);
 
-   // Dòng 7: Thoát lệnh EMA 20
+   // Dòng 9: Thoát lệnh EMA 20
    double ema20Val[1];
    double ema20Num = (CopyBuffer(g_handleEMA20, 0, 1, 1, ema20Val) == 1) ? ema20Val[0] : 0.0;
-   SetHudLabel("VALENTINI_HUD_L7", StringFormat("🛡️ Đường Thoát Lệnh (EMA 20): %.2f", ema20Num),
-               panelX + 12, startY + lineH * 6, clrWheat, 8);
+   SetHudLabel("VALENTINI_HUD_L9", StringFormat("🛡️ Đường Thoát Lệnh (EMA 20): %.2f", ema20Num),
+               panelX + 12, startY + lineH * 8, clrWheat, 8);
 
-   // Dòng 8: Trạng thái Hệ thống
-   string statusText = g_isLockedForDay ? "🔴 TẠM DỪNG: DAILY LOSS LIMIT REACHED" : "🟢 SẴN SÀNG QUÉT BREAKOUT & ORDER FLOW";
-   color  statusClr  = g_isLockedForDay ? clrRed : clrLime;
-   SetHudLabel("VALENTINI_HUD_L8", StringFormat("🚦 Trạng Thái: %s", statusText),
-               panelX + 12, startY + lineH * 7, statusClr, 9, true);
-
-   // Dòng 9: Phiên Giao dịch
+   // Dòng 10: Phiên Giao dịch
    MqlDateTime gmt;
    TimeToStruct(GetGMTTime(), gmt);
    int vnHour = (gmt.hour + 7) % 24;
    bool is24h = (InpStartHourGMT == 0 && InpEndHourGMT >= 24);
    bool inSession = is24h || (gmt.hour >= InpStartHourGMT && gmt.hour < InpEndHourGMT);
    string sessionDesc = is24h ? "24/24 (XUYÊN SUỐT TOÀN THỜI GIAN)" : StringFormat("%02d:00-%02d:00 GMT [%02dh-%02dh VN]", InpStartHourGMT, InpEndHourGMT, (InpStartHourGMT+7)%24, (InpEndHourGMT+7)%24);
-   SetHudLabel("VALENTINI_HUD_L9", StringFormat("⏱️ Phiên Trade: %s (%s)",
-                                               sessionDesc, inSession ? "ĐANG HOẠT ĐỘNG 🟢" : "NGOÀI GIỜ 🟡"),
-               panelX + 12, startY + lineH * 8, inSession ? clrSpringGreen : clrGray, 8);
+   SetHudLabel("VALENTINI_HUD_L10", StringFormat("⏱️ Phiên Trade: %s (%s)",
+                                                sessionDesc, inSession ? "ĐANG HOẠT ĐỘNG 🟢" : "NGOÀI GIỜ 🟡"),
+               panelX + 12, startY + lineH * 9, inSession ? clrSpringGreen : clrGray, 8);
 
-   // Dòng 10: Chế độ Thực thi
-   SetHudLabel("VALENTINI_HUD_L10", StringFormat("🎯 Chế Độ Vào Lệnh: %s",
+   // Dòng 11: Trạng thái Hệ thống
+   string statusText = g_isLockedForDay ? "🔴 TẠM DỪNG: DAILY LOSS LIMIT REACHED" : "🟢 SẴN SÀNG QUÉT BREAKOUT & ORDER FLOW";
+   color  statusClr  = g_isLockedForDay ? clrRed : clrLime;
+   SetHudLabel("VALENTINI_HUD_L11", StringFormat("🚦 Trạng Thái: %s", statusText),
+               panelX + 12, startY + lineH * 10, statusClr, 9, true);
+
+   // Dòng 12: Chế độ Thực thi
+   SetHudLabel("VALENTINI_HUD_L12", StringFormat("🎯 Chế Độ Vào Lệnh: %s",
                                                 (InpEntryStyle == ENTRY_BREAKOUT_DIRECT ? "Direct Breakout (Xung Lực)" : "Pullback Retest (Bảo Thủ)")),
-               panelX + 12, startY + lineH * 9, clrLightSlateGray, 8);
+               panelX + 12, startY + lineH * 11, clrLightSlateGray, 8);
   }
 
 //+------------------------------------------------------------------+
