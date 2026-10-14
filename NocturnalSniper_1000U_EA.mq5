@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                     NocturnalSniper_1000U_EA.mq5 |
 //|          XẠ THỦ PHIÊN TỐI - HỆ THỐNG GIAO DỊCH VÀNG VỐN 1000$     |
 //|        Tối Ưu Tỷ Lệ Thắng Cao Nhất | Chờ Điểm Đẹp Mới Vào Lệnh   |
@@ -110,6 +110,7 @@ input ulong                     InpMagicNumber           = 8882026;      // Magi
 input string                    InpTradeComment          = "Nocturnal_1000U"; // Ghi chú lệnh
 input ulong                     InpSlippage              = 30;           // Độ trượt giá tối đa (Points)
 input bool                      InpShowDashboard         = true;         // Hiển thị HUD Dashboard trên Chart
+input bool                      InpShowProjectedLevels   = true;         // Vẽ đường Entry, SL, TP dự kiến trên Chart
 
 //+------------------------------------------------------------------+
 //| GLOBAL OBJECTS & HANDLES                                         |
@@ -150,6 +151,14 @@ bool           m_isVolShocked      = false;
 double         m_currentVolRatio   = 1.0;
 int            m_lastSetupScore    = 0;
 string         m_lastSetupDesc     = "Đang chờ tín hiệu A+...";
+
+// Mốc Entry / SL / TP của Setup đang theo dõi (Tự động Reset khi tìm điểm vào khác)
+int            m_projDir           = 0;
+double         m_projEntry         = 0.0;
+double         m_projSl            = 0.0;
+double         m_projTp            = 0.0;
+string         m_projBiasText      = "TRUNG LẬP";
+color          m_projBiasColor     = clrSilver;
 
 //+------------------------------------------------------------------+
 //| HÀM LẤY GIỜ VIỆT NAM GMT+7 CHUẨN XÁC 100%                        |
@@ -227,6 +236,8 @@ int OnInit()
    PrintFormat("Biểu tượng: %s (Digits: %d) | Vốn: $%.2f | Chế độ Giờ VN: %s (Bắt đầu: %02d:%02d VN)",
                _Symbol, _Digits, m_account.Balance(), InpUseVietnamTime ? "BẬT" : "TẮT", InpEveningStartHourVN, InpEveningStartMinVN);
 
+   ResetChartProjections(); // Khởi động sạch biểu đồ
+
    return INIT_SUCCEEDED;
   }
 
@@ -245,6 +256,7 @@ void OnDeinit(const int reason)
    if(m_atrSlowHandle    != INVALID_HANDLE) IndicatorRelease(m_atrSlowHandle);
 
    ObjectsDeleteAll(0, "NS_");
+   ObjectsDeleteAll(0, "NS_PROJ_");
    Comment("");
   }
 
@@ -268,7 +280,7 @@ void OnTick()
    ProcessEveningSessionFinish();
 
    // 5. Kiểm tra nến M15 đóng cửa để quét A+ Setup
-   datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
+   datetime currentBarTime = iTime(_Symbol, PERIOD_M15, 0);
    if(currentBarTime != m_lastBarTime)
      {
       m_lastBarTime = currentBarTime;
@@ -767,7 +779,7 @@ int EvaluateConfluenceScore(int direction, ENUM_PRICE_ACTION_SIGNAL paSignal, do
      {
       MqlRates ratesList[];
       ArraySetAsSeries(ratesList, true);
-      if(CopyRates(_Symbol, PERIOD_CURRENT, 1, 1, ratesList) > 0)
+      if(CopyRates(_Symbol, PERIOD_M15, 1, 1, ratesList) > 0)
         {
          MqlRates prevBar = ratesList[0];
          if(direction == 1 && prevBar.low < m_asianLow && prevBar.close > m_asianLow)
@@ -888,7 +900,7 @@ void EvaluateAndExecuteSniperSetup()
 
    MqlRates rates[];
    ArraySetAsSeries(rates, true);
-   if(CopyRates(_Symbol, PERIOD_CURRENT, 1, 3, rates) < 3) return;
+   if(CopyRates(_Symbol, PERIOD_M15, 1, 3, rates) < 3) return;
 
    MqlRates c1 = rates[0];
    MqlRates c2 = rates[1];
@@ -1172,6 +1184,91 @@ void SetGuiPanel(string name, int x, int y, int width, int height, color bgColor
       ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
       ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
       ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| VẼ ĐƯỜNG DỰ BÁO XU HƯỚNG & ENTRY / SL / TP DỰ KIẾN LÊN BIỂU ĐỒ   |
+//+------------------------------------------------------------------+
+void DrawProjectionHLine(string name, double price, color clr, ENUM_LINE_STYLE style, int width, string desc)
+  {
+   if(ObjectFind(0, name) < 0)
+     {
+      ObjectCreate(0, name, OBJ_HLINE, 0, 0, price);
+      ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+      ObjectSetInteger(0, name, OBJPROP_STYLE, style);
+      ObjectSetInteger(0, name, OBJPROP_WIDTH, width);
+      ObjectSetInteger(0, name, OBJPROP_BACK, false);
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+      ObjectSetString(0, name, OBJPROP_TEXT, desc);
+     }
+   else
+     {
+      ObjectSetDouble(0, name, OBJPROP_PRICE, price);
+      ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+      ObjectSetString(0, name, OBJPROP_TEXT, desc);
+     }
+  }
+
+void ResetChartProjections()
+  {
+   m_projEntry = 0.0;
+   m_projSl    = 0.0;
+   m_projTp    = 0.0;
+   ObjectsDeleteAll(0, "NS_PROJ_");
+  }
+
+void SetChartProjections(int dir, double entry, double sl, double tp)
+  {
+   m_projDir   = dir;
+   m_projEntry = entry;
+   m_projSl    = sl;
+   m_projTp    = tp;
+
+   if(!InpShowProjectedLevels || CountTotalOpenPositions() > 0)
+     {
+      ObjectsDeleteAll(0, "NS_PROJ_");
+      return;
+     }
+
+   color entryClr = C'255,215,0';
+   color slClr    = C'255,75,75';
+   color tpClr    = C'46,213,115';
+
+   string dirStr = (dir == -1 ? "SELL" : "BUY");
+   string entryDesc = StringFormat(">> [MỐC %s] %.3f", dirStr, m_projEntry);
+   string slDesc    = StringFormat(">> [SL] %.3f", m_projSl);
+   string tpDesc    = StringFormat(">> [TP] %.3f (R:R 1:%.1f)", m_projTp, InpTargetRrRatio);
+
+   DrawProjectionHLine("NS_PROJ_ENTRY", m_projEntry, entryClr, STYLE_DOT, 1, entryDesc);
+   DrawProjectionHLine("NS_PROJ_SL", m_projSl, slClr, STYLE_DASH, 1, slDesc);
+   DrawProjectionHLine("NS_PROJ_TP", m_projTp, tpClr, STYLE_DASH, 1, tpDesc);
+  }
+
+void UpdateMacroBias()
+  {
+   m_projDir = 0;
+   m_projBiasText = "TRUNG LẬP (Đang cân bằng)";
+   m_projBiasColor = clrSilver;
+
+   double htfFast[], htfSlow[];
+   ArraySetAsSeries(htfFast, true);
+   ArraySetAsSeries(htfSlow, true);
+   if(CopyBuffer(m_htfFastEmaHandle, 0, 0, 1, htfFast) > 0 &&
+      CopyBuffer(m_htfSlowEmaHandle, 0, 0, 1, htfSlow) > 0)
+     {
+      if(htfFast[0] < htfSlow[0])
+        {
+         m_projDir = -1;
+         m_projBiasText = "CANH SELL 🔴 (Thuận Trend H1 Đổ Đèo)";
+         m_projBiasColor = C'255,90,95';
+        }
+      else if(htfFast[0] > htfSlow[0])
+        {
+         m_projDir = 1;
+         m_projBiasText = "CANH BUY 🟢 (Thuận Trend H1 Tăng Trưởng)";
+         m_projBiasColor = C'46,213,115';
+        }
      }
   }
 
